@@ -1,0 +1,52 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract project ZIP
+        run: |
+          rm -rf android-project
+          mkdir -p android-project
+          unzip -q janmanch-india-tea.zip -d android-project
+
+      - name: Fix project for CI
+        working-directory: android-project
+        run: |
+          sed -i 's/googleDevtoolsKsp = "2.3.5"/googleDevtoolsKsp = "2.3.6"/' gradle/libs.versions.toml
+          sed -i '/signingConfig = signingConfigs.getByName("debugConfig")/d' app/build.gradle.kts
+          grep -n 'googleDevtoolsKsp' gradle/libs.versions.toml
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Gradle
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-9.3.1-bin.zip
+          unzip -q gradle-9.3.1-bin.zip -d "$HOME"
+          echo "$HOME/gradle-9.3.1/bin" >> "$GITHUB_PATH"
+
+      - name: Build Debug APK
+        working-directory: android-project
+        run: |
+          gradle --version
+          gradle assembleDebug --stacktrace --no-daemon --no-configuration-cache
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Janmanch-Debug-APK
+          path: android-project/**/app/build/outputs/apk/debug/*.apk
