@@ -2,6 +2,9 @@ name: Build Android APK
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   build:
@@ -22,7 +25,7 @@ jobs:
         run: |
           sed -i 's/googleDevtoolsKsp = "2.3.5"/googleDevtoolsKsp = "2.3.6"/' gradle/libs.versions.toml
           sed -i '/signingConfig = signingConfigs.getByName("debugConfig")/d' app/build.gradle.kts
-          grep 'googleDevtoolsKsp' gradle/libs.versions.toml || true
+          grep 'googleDevtoolsKsp' gradle/libs.versions.toml
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -40,7 +43,7 @@ jobs:
         working-directory: android-project
         run: |
           gradle --version
-          gradle assembleDebug --stacktrace --no-daemon
+          gradle assembleDebug --stacktrace --no-daemon --no-configuration-cache
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
