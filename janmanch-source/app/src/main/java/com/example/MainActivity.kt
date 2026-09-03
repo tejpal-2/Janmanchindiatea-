@@ -1,8 +1,13 @@
 package com.example
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
@@ -22,6 +27,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.core.content.ContextCompat
+import androidx.compose.ui.platform.LocalContext
 import com.example.model.NavTab
 import com.example.ui.components.JanmanchBottomNavigation
 import com.example.ui.components.JanmanchTopAppBar
@@ -51,13 +58,30 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun JanmanchApp(viewModel: JanmanchViewModel) {
+    val context = LocalContext.current
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
+    val currentUser by viewModel.currentUser.collectAsState()
+    LaunchedEffect(currentUser != null) {
+        if (currentUser != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     val language by viewModel.language.collectAsState()
     val isDarkTheme by viewModel.isDarkTheme.collectAsState()
     val currentTab by viewModel.currentTab.collectAsState()
-    val currentUser by viewModel.currentUser.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
     val posts by viewModel.posts.collectAsState()
     val users by viewModel.users.collectAsState()
+    val followingIds by viewModel.followingIds.collectAsState()
+    val followerIds by viewModel.followerIds.collectAsState()
     val blockedUsers by viewModel.blockedUsers.collectAsState()
     val notifications by viewModel.notifications.collectAsState()
     val reports by viewModel.reports.collectAsState()
@@ -115,7 +139,7 @@ fun JanmanchApp(viewModel: JanmanchViewModel) {
                 onBack = { viewModel.closePostDetail() },
                 onLikePost = { viewModel.toggleLike(it) },
                 onSavePost = { viewModel.toggleSave(it) },
-                onSharePost = { viewModel.showSnackbar("लिंक कॉपी हो गया!") },
+                onSharePost = { viewModel.sharePost(it); viewModel.showSnackbar("लिंक कॉपी हो गया!") },
                 onReportPost = { viewModel.reportPost(it, "अनुचित सामग्री") },
                 onDeletePost = { viewModel.deletePost(it) },
                 onTogglePin = { viewModel.togglePinPost(it) },
@@ -203,7 +227,7 @@ fun JanmanchApp(viewModel: JanmanchViewModel) {
                                     onLikeClick = { viewModel.toggleLike(it) },
                                     onCommentClick = { viewModel.openPostDetail(it) },
                                     onSaveClick = { viewModel.toggleSave(it) },
-                                    onShareClick = { viewModel.showSnackbar("लिंक कॉपी हो गया!") },
+                                    onShareClick = { viewModel.sharePost(it); viewModel.showSnackbar("लिंक कॉपी हो गया!") },
                                     onReportSubmit = { postId, reason -> viewModel.reportPost(postId, reason) },
                                     onBlockUser = { viewModel.blockUser(it) },
                                     onDeletePost = { viewModel.deletePost(it) },
@@ -224,12 +248,14 @@ fun JanmanchApp(viewModel: JanmanchViewModel) {
                                     onLikePost = { viewModel.toggleLike(it) },
                                     onCommentPost = { viewModel.openPostDetail(it) },
                                     onSavePost = { viewModel.toggleSave(it) },
-                                    onSharePost = { viewModel.showSnackbar("लिंक साझा किया गया") },
+                                    onSharePost = { viewModel.sharePost(it); viewModel.showSnackbar("लिंक साझा किया गया") },
                                     onReportPost = { viewModel.reportPost(it, "अनुचित पोस्ट") }
                                 )
                                 NavTab.NETWORK -> NetworkScreen(
                                     users = users,
                                     currentUser = currentUser,
+                                    followingIds = followingIds,
+                                    followerIds = followerIds,
                                     language = language,
                                     onFollowToggle = { viewModel.toggleFollow(it) }
                                 )
@@ -258,7 +284,7 @@ fun JanmanchApp(viewModel: JanmanchViewModel) {
                                     onLikePost = { viewModel.toggleLike(it) },
                                     onCommentPost = { viewModel.openPostDetail(it) },
                                     onSavePost = { viewModel.toggleSave(it) },
-                                    onSharePost = { viewModel.showSnackbar("लिंक साझा किया गया") },
+                                    onSharePost = { viewModel.sharePost(it); viewModel.showSnackbar("लिंक साझा किया गया") },
                                     onDeletePost = { viewModel.deletePost(it) }
                                 )
                                 else -> FeedScreen(
@@ -270,7 +296,7 @@ fun JanmanchApp(viewModel: JanmanchViewModel) {
                                     onLikeClick = { viewModel.toggleLike(it) },
                                     onCommentClick = { viewModel.openPostDetail(it) },
                                     onSaveClick = { viewModel.toggleSave(it) },
-                                    onShareClick = { viewModel.showSnackbar("लिंक कॉपी हो गया!") },
+                                    onShareClick = { viewModel.sharePost(it); viewModel.showSnackbar("लिंक कॉपी हो गया!") },
                                     onReportSubmit = { postId, reason -> viewModel.reportPost(postId, reason) },
                                     onBlockUser = { viewModel.blockUser(it) },
                                     onDeletePost = { viewModel.deletePost(it) },

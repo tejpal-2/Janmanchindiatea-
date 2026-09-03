@@ -55,13 +55,13 @@ import com.example.ui.theme.ChaiTerracotta
 fun NetworkScreen(
     users: List<UserEntity>,
     currentUser: UserEntity?,
+    followingIds: Set<String>,
+    followerIds: Set<String>,
     language: AppLanguage,
     onFollowToggle: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableStateOf(0) } // 0=Suggested, 1=Following, 2=Followers
-    // For demo state tracking
-    var followedUserIds by remember { mutableStateOf(setOf("user_1", "user_2")) }
 
     Column(
         modifier = modifier
@@ -131,8 +131,8 @@ fun NetworkScreen(
 
         val filteredUsers = when (selectedTab) {
             0 -> users.filter { it.id != currentUser?.id }
-            1 -> users.filter { followedUserIds.contains(it.id) }
-            else -> users.filter { it.id == "user_3" || it.id == "user_4" }
+            1 -> users.filter { followingIds.contains(it.id) }
+            else -> users.filter { followerIds.contains(it.id) }
         }
 
         LazyColumn(
@@ -160,7 +160,7 @@ fun NetworkScreen(
                 }
             } else {
                 items(filteredUsers, key = { it.id }) { user ->
-                    val isFollowed = followedUserIds.contains(user.id)
+                    val isFollowed = followingIds.contains(user.id)
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
@@ -235,7 +235,6 @@ fun NetworkScreen(
                             if (isFollowed) {
                                 OutlinedButton(
                                     onClick = {
-                                        followedUserIds = followedUserIds - user.id
                                         onFollowToggle(user.id)
                                     },
                                     shape = RoundedCornerShape(20.dp),
@@ -252,7 +251,6 @@ fun NetworkScreen(
                             } else {
                                 Button(
                                     onClick = {
-                                        followedUserIds = followedUserIds + user.id
                                         onFollowToggle(user.id)
                                     },
                                     shape = RoundedCornerShape(20.dp),

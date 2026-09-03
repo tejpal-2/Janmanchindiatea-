@@ -2,7 +2,6 @@ package com.example.ui.screens
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -66,6 +65,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -101,18 +101,37 @@ fun CreatePostScreen(
     var showUrlInputs by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     // ActivityResult Launchers for Image & Video picking
     val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
+        contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
-        uri?.let { imageUrl = it.toString() }
+        uri?.let {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    it,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: SecurityException) {
+                // Some providers return a URI without persistable permission.
+            }
+            imageUrl = it.toString()
+        }
     }
 
     val videoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         uri?.let {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    it,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: SecurityException) {
+                // Some providers return a URI without persistable permission.
+            }
             videoUrl = it.toString()
             if (videoDuration.isBlank()) videoDuration = "02:15"
         }
@@ -447,9 +466,7 @@ fun CreatePostScreen(
                         // Pick Photo from Gallery
                         OutlinedButton(
                             onClick = {
-                                photoPickerLauncher.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                )
+                                photoPickerLauncher.launch(arrayOf("image/*"))
                             },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(12.dp),
@@ -463,7 +480,7 @@ fun CreatePostScreen(
                         // Pick Video from Gallery
                         OutlinedButton(
                             onClick = {
-                                videoPickerLauncher.launch("video/*")
+                                videoPickerLauncher.launch(arrayOf("video/*"))
                             },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(12.dp),

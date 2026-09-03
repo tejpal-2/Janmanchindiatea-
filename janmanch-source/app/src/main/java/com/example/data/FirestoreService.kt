@@ -1,20 +1,49 @@
 package com.example.data
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import com.example.model.PostEntity
+import com.example.model.UserEntity
 import com.google.firebase.FirebaseApp
-import com.google.firebase.FirebaseOptions
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
+import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 
 class FirestoreService(private val context: Context) {
+
+    private fun firebaseApp(): FirebaseApp? = try {
+        FirebaseApp.getApps(context).firstOrNull() ?: FirebaseApp.initializeApp(context)
+    } catch (e: Exception) {
+        Log.d("FirestoreService", "Firebase is not configured: ${e.message}")
+        null
+    }
+
+    private val firebaseAuth: FirebaseAuth? by lazy {
+        try {
+            firebaseApp()?.let { FirebaseAuth.getInstance(it) }
+        } catch (e: Exception) {
+            Log.d("FirestoreService", "Firebase Auth unavailable: ${e.message}")
+            null
+        }
+    }
+
+    private val firebaseStorage: FirebaseStorage? by lazy {
+        try {
+            firebaseApp()?.let { FirebaseStorage.getInstance(it) }
+        } catch (e: Exception) {
+            Log.d("FirestoreService", "Firebase Storage unavailable: ${e.message}")
+            null
+        }
+    }
 
     private val firestore: FirebaseFirestore? by lazy {
         try {
@@ -24,18 +53,8 @@ class FirestoreService(private val context: Context) {
                 } catch (e: Exception) {
                     null
                 }
-                initializedApp ?: run {
-                    try {
-                        val options = FirebaseOptions.Builder()
-                            .setApplicationId("1:816327972299:android:com.aistudio.janmanchtea.jmt")
-                            .setProjectId("ais-dev-oebvpdp4g36ht6ckdip5kf")
-                            .setApiKey("AIzaSyDummyKeyForGracefulLocalInit")
-                            .build()
-                        FirebaseApp.initializeApp(context, options)
-                    } catch (e: Exception) {
-                        null
-                    }
-                }
+
+                initializedApp ?: null
             } else {
                 FirebaseApp.getInstance()
             }
@@ -48,6 +67,58 @@ class FirestoreService(private val context: Context) {
         } catch (e: Exception) {
             Log.d("FirestoreService", "Local database mode active: ${e.message}")
             null
+        }
+    }
+
+    suspend fun signIn(email: String, password: String): Result<String> = runCatching {
+        val auth = firebaseAuth ?: error("Firebase Authentication is not configured")
+        auth.signInWithEmailAndPassword(email, password).await()
+        auth.currentUser?.uid ?: error("Authentication returned no user")
+    }
+
+    suspend fun createAccount(email: String, password: String): Result<String> = runCatching {
+        val auth = firebaseAuth ?: error("Firebase Authentication is not configured")
+        auth.createUserWithEmailAndPassword(email, password).await()
+        auth.currentUser?.uid ?: error("Authentication returned no user")
+    }
+
+    fun signOut() {
+        firebaseAuth?.signOut()
+    }
+
+    fun signedInEmail(): String? = firebaseAuth?.currentUser?.email
+
+    suspend fun uploadMedia(uri: Uri, userId: String, kind: String): Result<String> = runCatching {
+        val storage = firebaseStorage ?: error("Firebase Storage is not configured")
+        val fileName = "${System.currentTimeMillis()}_${uri.lastPathSegment ?: "media"}"
+        val ref = storage.reference.child("users/$userId/$kind/$fileName")
+        ref.putFile(uri).await()
+        ref.downloadUrl.await().toString()
+    }
+
+    suspend fun saveUser(user: UserEntity): Result<Unit> {
+        val db = firestore ?: return Result.failure(Exception("Firestore not initialized"))
+        return try {
+            val userMap = hashMapOf<String, Any?>(
+                "id" to user.id,
+                "username" to user.username,
+                "fullName" to user.fullName,
+                "email" to user.email,
+                "avatarUrl" to user.avatarUrl,
+                "bannerUrl" to user.bannerUrl,
+                "bio" to user.bio,
+                "location" to user.location,
+                "followersCount" to user.followersCount,
+                "followingCount" to user.followingCount,
+                "chaiPoints" to user.chaiPoints,
+                "isVerified" to user.isVerified,
+                "joinedDate" to user.joinedDate
+            )
+            db.collection("users").document(user.id).set(userMap, SetOptions.merge()).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e("FirestoreService", "Failed to save user to Firestore: ${e.message}")
+            Result.failure(e)
         }
     }
 
@@ -172,6 +243,23 @@ class FirestoreService(private val context: Context) {
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e("FirestoreService", "Failed to save post to Firestore: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun incrementShareCount(postId: String): Result<Unit> {
+        return incrementPostMetric(postId, "sharesCount", 1)
+    }
+
+    suspend fun incrementPostMetric(postId: String, field: String, delta: Long): Result<Unit> {
+        val db = firestore ?: return Result.failure(Exception("Firestore not initialized"))
+        return try {
+            db.collection("posts").document(postId)
+                .update(field, FieldValue.increment(delta))
+                .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.w("FirestoreService", "Failed to update post metric: ${e.message}")
             Result.failure(e)
         }
     }

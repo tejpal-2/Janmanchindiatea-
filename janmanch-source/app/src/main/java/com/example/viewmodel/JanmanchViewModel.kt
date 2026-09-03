@@ -65,8 +65,19 @@ class JanmanchViewModel(application: Application) : AndroidViewModel(application
     val blockedUsers: StateFlow<List<UserEntity>> = repository.getBlockedUsers()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val followingIds: StateFlow<Set<String>> = currentUser
+        .flatMapLatest { user -> if (user == null) flowOf(emptySet()) else repository.getFollowingIds(user.id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
+    val followerIds: StateFlow<Set<String>> = currentUser
+        .flatMapLatest { user -> if (user == null) flowOf(emptySet()) else repository.getFollowerIds(user.id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
     // Notifications
-    val notifications: StateFlow<List<NotificationEntity>> = repository.getNotifications()
+    val notifications: StateFlow<List<NotificationEntity>> = currentUser
+        .flatMapLatest { user ->
+            repository.getNotifications(user?.id ?: "user_me")
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Reports for Admin
@@ -228,6 +239,12 @@ class JanmanchViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             repository.toggleSave(postId)
             showSnackbar(if (_language.value == AppLanguage.HINDI) "सहेजने की स्थिति बदली गई" else "Bookmark updated")
+        }
+    }
+
+    fun sharePost(postId: String) {
+        viewModelScope.launch {
+            repository.incrementShare(postId)
         }
     }
 

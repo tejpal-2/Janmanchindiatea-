@@ -18,6 +18,9 @@ interface UserDao {
     @Query("SELECT * FROM users WHERE id = :id")
     fun getUserById(id: String): Flow<UserEntity?>
 
+    @Query("SELECT * FROM users WHERE id = :id LIMIT 1")
+    suspend fun getUserByIdDirect(id: String): UserEntity?
+
     @Query("SELECT * FROM users WHERE email = :email LIMIT 1")
     suspend fun getUserByEmail(email: String): UserEntity?
 
@@ -41,6 +44,12 @@ interface UserDao {
 
     @Query("UPDATE users SET isBlocked = :blocked WHERE id = :userId")
     suspend fun setBlocked(userId: String, blocked: Boolean)
+
+    @Query("UPDATE users SET followersCount = MAX(0, followersCount + :delta) WHERE id = :userId")
+    suspend fun changeFollowers(userId: String, delta: Int)
+
+    @Query("UPDATE users SET followingCount = MAX(0, followingCount + :delta) WHERE id = :userId")
+    suspend fun changeFollowing(userId: String, delta: Int)
 
     @Query("SELECT * FROM users WHERE (fullName LIKE '%' || :query || '%' OR username LIKE '%' || :query || '%') AND isBlocked = 0")
     fun searchUsers(query: String): Flow<List<UserEntity>>
@@ -97,6 +106,9 @@ interface PostDao {
 
     @Query("UPDATE posts SET isSaved = :isSaved WHERE id = :id")
     suspend fun updateSave(id: String, isSaved: Boolean)
+
+    @Query("UPDATE posts SET sharesCount = sharesCount + 1 WHERE id = :id")
+    suspend fun incrementShares(id: String)
 
     @Query("UPDATE posts SET isPinned = :isPinned WHERE id = :id")
     suspend fun setPinned(id: String, isPinned: Boolean)

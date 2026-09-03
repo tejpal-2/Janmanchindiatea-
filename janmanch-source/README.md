@@ -20,3 +20,11 @@ View your app in AI Studio: https://ai.studio/apps/d1fbcd6d-6e9c-46e8-b7c8-1f7d3
 5. Remove this line from the app's `build.gradle.kts` file: `signingConfig = signingConfigs.getByName("debugConfig")`
 6. Run the app on an emulator or physical device
 7. If you have already published your app in AI Studio, please [request upload key reset](https://support.google.com/googleplay/android-developer/answer/9842756#zippy=%2Crequest-an-upload-key-reset) in Google Play Console.
+
+## Firebase setup
+
+Add the Android app configuration for `com.aistudio.janmanchtea.jmt` as
+`app/google-services.json` and enable Email/Password Authentication, Firestore,
+and Storage in the Firebase console. Without that file the app intentionally
+continues in its Room-backed offline mode; media selected from the system
+picker is uploaded to Storage when Firebase is configured.

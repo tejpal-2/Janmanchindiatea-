@@ -6,14 +6,18 @@ import com.example.model.NotificationEntity
 import com.example.model.PostEntity
 import com.example.model.ReportEntity
 import com.example.model.UserEntity
+import android.net.Uri
+import android.util.Patterns
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.security.MessageDigest
 import java.util.UUID
 
 class JanmanchRepository(
@@ -30,12 +34,15 @@ class JanmanchRepository(
 
     private val firestoreService = FirestoreService(context)
 
-    private val _currentUser = MutableStateFlow<UserEntity?>(SampleSeedData.currentUser)
+    private val _currentUser = MutableStateFlow<UserEntity?>(null)
     val currentUser: StateFlow<UserEntity?> = _currentUser.asStateFlow()
 
     init {
         coroutineScope.launch {
             seedInitialDataIfNeeded()
+            firestoreService.signedInEmail()?.let { email ->
+                userDao.getUserByEmail(email)?.let { _currentUser.value = it }
+            }
             syncRemoteFirestorePosts()
         }
     }
@@ -44,7 +51,15 @@ class JanmanchRepository(
         try {
             firestoreService.listenToPosts().collect { remotePosts ->
                 if (remotePosts.isNotEmpty()) {
-                    postDao.insertPosts(remotePosts)
+                    // Keep user-specific Room state when a remote snapshot arrives.
+                    // Firestore stores the canonical post, while likes/bookmarks are local
+                    // until a signed-in account is available for server-side sync.
+                    val mergedPosts = remotePosts.map { remote ->
+                        val local = postDao.getPostByIdDirect(remote.id)
+                        if (local == null) remote
+                        else remote.copy(isLiked = local.isLiked, isSaved = local.isSaved)
+                    }
+                    postDao.insertPosts(mergedPosts)
                 }
             }
         } catch (e: Exception) {
@@ -69,30 +84,33 @@ class JanmanchRepository(
 
     // Auth
     suspend fun login(email: String, password: String): Result<UserEntity> = withContext(Dispatchers.IO) {
-        val user = userDao.getUserByEmail(email.trim())
-        if (user != null) {
+        val cleanEmail = email.trim()
+        if (!Patterns.EMAIL_ADDRESS.matcher(cleanEmail).matches() || password.isBlank()) {
+            return@withContext Result.failure(Exception("Enter a valid email and password"))
+        }
+        val user = userDao.getUserByEmail(cleanEmail)
+        if (user != null && passwordsMatch(user.passwordHash, password)) {
             _currentUser.value = user
             Result.success(user)
         } else {
-            // If doesn't exist, create a new demo user with this email
-            val newUser = UserEntity(
-                id = "user_" + UUID.randomUUID().toString().take(8),
-                username = email.substringBefore("@").replace(".", "_"),
-                fullName = email.substringBefore("@").replaceFirstChar { it.uppercase() },
-                email = email.trim(),
-                passwordHash = password,
-                avatarUrl = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&auto=format&fit=crop&q=80",
-                bio = "जनमंच इंडिया टी परिवार का सदस्य ☕",
-                location = "भारत (India)",
-                followersCount = 0,
-                followingCount = 0,
-                chaiPoints = 100,
-                isVerified = false,
-                isAdmin = false
+            val firebaseResult = firestoreService.signIn(cleanEmail, password)
+            if (firebaseResult.isFailure) return@withContext Result.failure(
+                firebaseResult.exceptionOrNull() ?: Exception("Invalid credentials")
             )
-            userDao.insertUser(newUser)
-            _currentUser.value = newUser
-            Result.success(newUser)
+            val uid = firebaseResult.getOrThrow()
+            val remoteUser = user ?: UserEntity(
+                id = uid,
+                username = cleanEmail.substringBefore("@").replace(".", "_"),
+                fullName = cleanEmail.substringBefore("@").replaceFirstChar { it.uppercase() },
+                email = cleanEmail,
+                passwordHash = "",
+                bio = "जनमंच इंडिया टी परिवार का सदस्य ☕",
+                location = "भारत (India)"
+            )
+            userDao.insertUser(remoteUser)
+            firestoreService.saveUser(remoteUser)
+            _currentUser.value = remoteUser
+            Result.success(remoteUser)
         }
     }
 
@@ -105,12 +123,21 @@ class JanmanchRepository(
     ): Result<UserEntity> = withContext(Dispatchers.IO) {
         val cleanEmail = email.trim()
         val cleanUsername = username.trim().removePrefix("@")
+        if (fullName.trim().isBlank() || !Patterns.EMAIL_ADDRESS.matcher(cleanEmail).matches() ||
+            password.length < 6 || cleanUsername.isBlank()
+        ) {
+            return@withContext Result.failure(Exception("Valid email, username and 6+ character password are required"))
+        }
+        if (userDao.getUserByEmail(cleanEmail) != null || userDao.getUserByUsername(cleanUsername) != null) {
+            return@withContext Result.failure(Exception("An account with these details already exists"))
+        }
+        val firebaseId = firestoreService.createAccount(cleanEmail, password).getOrNull()
         val newUser = UserEntity(
-            id = "user_" + UUID.randomUUID().toString().take(8),
+            id = firebaseId ?: "user_" + UUID.randomUUID().toString().take(8),
             username = cleanUsername,
             fullName = fullName.trim(),
             email = cleanEmail,
-            passwordHash = password,
+            passwordHash = hashPassword(password),
             avatarUrl = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&auto=format&fit=crop&q=80",
             bio = "जनमंच इंडिया टी सदस्य ☕",
             location = if (location.isNotBlank()) location.trim() else "भारत",
@@ -121,15 +148,25 @@ class JanmanchRepository(
             isAdmin = false
         )
         userDao.insertUser(newUser)
+        firestoreService.saveUser(newUser)
         _currentUser.value = newUser
         Result.success(newUser)
     }
+
+    private fun passwordsMatch(stored: String, password: String): Boolean =
+        stored == password || stored == hashPassword(password)
+
+    private fun hashPassword(password: String): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(password.toByteArray(Charsets.UTF_8))
+            .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
 
     fun continueAsGuest() {
         _currentUser.value = SampleSeedData.currentUser
     }
 
     fun logout() {
+        firestoreService.signOut()
         _currentUser.value = null
     }
 
@@ -147,6 +184,7 @@ class JanmanchRepository(
             avatarUrl = avatarUrl.ifBlank { current.avatarUrl }
         )
         userDao.updateUser(updated)
+        firestoreService.saveUser(updated)
         _currentUser.value = updated
     }
 
@@ -178,6 +216,16 @@ class JanmanchRepository(
         videoDuration: String?
     ): Result<PostEntity> = withContext(Dispatchers.IO) {
         val author = _currentUser.value ?: return@withContext Result.failure(Exception("Not logged in"))
+        val cleanContent = content.trim()
+        if (cleanContent.isBlank()) {
+            return@withContext Result.failure(Exception("Post content cannot be empty"))
+        }
+        val uploadedImage = imageUrl?.takeIf { it.startsWith("content://") }?.let {
+            firestoreService.uploadMedia(Uri.parse(it), author.id, "images").getOrNull()
+        }
+        val uploadedVideo = videoUrl?.takeIf { it.startsWith("content://") }?.let {
+            firestoreService.uploadMedia(Uri.parse(it), author.id, "videos").getOrNull()
+        }
         val newPost = PostEntity(
             id = "post_" + UUID.randomUUID().toString().take(8),
             authorId = author.id,
@@ -186,9 +234,9 @@ class JanmanchRepository(
             authorAvatarUrl = author.avatarUrl,
             authorIsVerified = author.isVerified,
             category = category,
-            content = content.trim(),
-            imageUrl = imageUrl?.takeIf { it.isNotBlank() },
-            videoUrl = videoUrl?.takeIf { it.isNotBlank() },
+            content = cleanContent,
+            imageUrl = uploadedImage ?: imageUrl?.takeIf { it.isNotBlank() },
+            videoUrl = uploadedVideo ?: videoUrl?.takeIf { it.isNotBlank() },
             videoDuration = videoDuration?.takeIf { it.isNotBlank() },
             chaiMood = chaiMood,
             likesCount = 1,
@@ -213,6 +261,7 @@ class JanmanchRepository(
         val newLiked = !post.isLiked
         val newCount = if (newLiked) post.likesCount + 1 else (post.likesCount - 1).coerceAtLeast(0)
         postDao.updateLike(postId, newLiked, newCount)
+        firestoreService.incrementPostMetric(postId, "likesCount", if (newLiked) 1 else -1)
 
         // Send notification to author if someone likes
         val current = _currentUser.value
@@ -231,6 +280,12 @@ class JanmanchRepository(
                 )
             )
         }
+    }
+
+    suspend fun incrementShare(postId: String) = withContext(Dispatchers.IO) {
+        val post = postDao.getPostByIdDirect(postId) ?: return@withContext
+        postDao.incrementShares(postId)
+        firestoreService.incrementShareCount(postId)
     }
 
     suspend fun toggleSave(postId: String) = withContext(Dispatchers.IO) {
@@ -256,6 +311,12 @@ class JanmanchRepository(
 
     suspend fun addComment(postId: String, text: String): Result<CommentEntity> = withContext(Dispatchers.IO) {
         val author = _currentUser.value ?: return@withContext Result.failure(Exception("Not logged in"))
+        val cleanText = text.trim()
+        if (cleanText.isBlank()) {
+            return@withContext Result.failure(Exception("Comment cannot be empty"))
+        }
+        val post = postDao.getPostByIdDirect(postId)
+            ?: return@withContext Result.failure(Exception("Post no longer exists"))
         val comment = CommentEntity(
             id = "comm_" + UUID.randomUUID().toString().take(8),
             postId = postId,
@@ -263,14 +324,14 @@ class JanmanchRepository(
             authorName = author.fullName,
             authorUsername = author.username,
             authorAvatarUrl = author.avatarUrl,
-            text = text.trim(),
+            text = cleanText,
             createdAt = System.currentTimeMillis()
         )
         commentDao.insertComment(comment)
         postDao.incrementComments(postId)
+        firestoreService.incrementPostMetric(postId, "commentsCount", 1)
 
-        val post = postDao.getPostByIdDirect(postId)
-        if (post != null && post.authorId != author.id) {
+        if (post.authorId != author.id) {
             notificationDao.insertNotification(
                 NotificationEntity(
                     id = "notif_" + UUID.randomUUID().toString().take(8),
@@ -279,7 +340,7 @@ class JanmanchRepository(
                     senderName = author.fullName,
                     senderAvatarUrl = author.avatarUrl,
                     title = "नई टिप्पणी",
-                    message = "${author.fullName} ने आपकी पोस्ट पर टिप्पणी की: \"${text.take(30)}...\"",
+                    message = "${author.fullName} ने आपकी पोस्ट पर टिप्पणी की: \"${cleanText.take(30)}…\"",
                     relatedPostId = postId,
                     timestamp = System.currentTimeMillis()
                 )
@@ -297,13 +358,25 @@ class JanmanchRepository(
     fun isFollowing(followerId: String, followedId: String): Flow<Boolean> =
         followDao.isFollowing(followerId, followedId)
 
+    fun getFollowingIds(userId: String): Flow<Set<String>> =
+        followDao.getFollowing(userId).map { it.map(FollowEntity::followedId).toSet() }
+
+    fun getFollowerIds(userId: String): Flow<Set<String>> =
+        followDao.getFollowers(userId).map { it.map(FollowEntity::followerId).toSet() }
+
     suspend fun toggleFollow(followedId: String) = withContext(Dispatchers.IO) {
         val current = _currentUser.value ?: return@withContext
-        val isFollowed = followDao.isFollowingDirect(current.id, followedId)
+        val currentId = current.id
+        if (current.id == followedId) return@withContext
+        val isFollowed = followDao.isFollowingDirect(currentId, followedId)
         if (isFollowed) {
-            followDao.deleteFollow(current.id, followedId)
+            followDao.deleteFollow(currentId, followedId)
+            userDao.changeFollowing(currentId, -1)
+            userDao.changeFollowers(followedId, -1)
         } else {
-            followDao.insertFollow(FollowEntity(current.id, followedId))
+            followDao.insertFollow(FollowEntity(currentId, followedId))
+            userDao.changeFollowing(currentId, 1)
+            userDao.changeFollowers(followedId, 1)
             // Send notif
             notificationDao.insertNotification(
                 NotificationEntity(
@@ -318,6 +391,11 @@ class JanmanchRepository(
                 )
             )
         }
+        userDao.getUserByIdDirect(currentId)?.let {
+            _currentUser.value = it
+            firestoreService.saveUser(it)
+        }
+        userDao.getUserByIdDirect(followedId)?.let { firestoreService.saveUser(it) }
     }
 
     suspend fun blockUser(userId: String) = withContext(Dispatchers.IO) {
@@ -334,10 +412,11 @@ class JanmanchRepository(
     fun searchUsers(query: String): Flow<List<UserEntity>> = userDao.searchUsers(query)
 
     // Notifications
-    fun getNotifications(): Flow<List<NotificationEntity>> {
-        val currentId = _currentUser.value?.id ?: "user_me"
-        return notificationDao.getNotifications(currentId)
-    }
+    fun getNotifications(userId: String): Flow<List<NotificationEntity>> =
+        notificationDao.getNotifications(userId)
+
+    fun getNotifications(): Flow<List<NotificationEntity>> =
+        getNotifications(_currentUser.value?.id ?: "user_me")
 
     suspend fun markNotificationsRead() = withContext(Dispatchers.IO) {
         val currentId = _currentUser.value?.id ?: "user_me"

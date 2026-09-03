@@ -1,6 +1,8 @@
 package com.example.ui.components
 
 import android.content.Intent
+import android.net.Uri
+import android.widget.VideoView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -40,6 +42,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -366,29 +369,22 @@ fun PostCard(
                             )
                         }
                     } else {
-                        // Simulated Active Player with streaming indicator
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(16.dp)
-                        ) {
-                            Text(
-                                text = "▶️ वीडियो चल रहा है...",
-                                color = ChaiAmber,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Janmanch Media Player",
-                                color = Color.LightGray,
-                                fontSize = 12.sp
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "रोकने के लिए टैप करें",
-                                color = Color.White.copy(alpha = 0.7f),
-                                fontSize = 11.sp
-                            )
-                        }
+                        AndroidView(
+                            factory = { viewContext ->
+                                VideoView(viewContext).apply {
+                                    setVideoURI(Uri.parse(post.videoUrl))
+                                    setOnPreparedListener { player ->
+                                        player.isLooping = true
+                                        start()
+                                    }
+                                }
+                            },
+                            update = { videoView ->
+                                if (isVideoPlaying && !videoView.isPlaying) videoView.start()
+                                if (!isVideoPlaying && videoView.isPlaying) videoView.pause()
+                            },
+                            modifier = Modifier.fillMaxWidth().height(190.dp)
+                        )
                     }
 
                     // Duration Badge top right
@@ -474,6 +470,7 @@ fun PostCard(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .clickable {
+                            onShareClick()
                             val sendIntent: Intent = Intent().apply {
                                 action = Intent.ACTION_SEND
                                 putExtra(Intent.EXTRA_TEXT, "☕ Janmanch India Tea: ${post.content.take(100)}...")
@@ -483,7 +480,7 @@ fun PostCard(
                             try {
                                 context.startActivity(shareIntent)
                             } catch (e: Exception) {
-                                onShareClick()
+                                // The share counter is already recorded; unsupported targets simply keep the feed usable.
                             }
                         }
                         .padding(horizontal = 6.dp, vertical = 4.dp)
