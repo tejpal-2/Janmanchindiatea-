@@ -1,0 +1,178 @@
+package com.example.data
+
+import android.content.Context
+import android.util.Log
+import com.example.model.PostEntity
+import com.google.firebase.FirebaseApp
+import com.google.firebase.FirebaseOptions
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.SetOptions
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.tasks.await
+
+class FirestoreService(private val context: Context) {
+
+    private val firestore: FirebaseFirestore? by lazy {
+        try {
+            val app = if (FirebaseApp.getApps(context).isEmpty()) {
+                val initializedApp = try {
+                    FirebaseApp.initializeApp(context)
+                } catch (e: Exception) {
+                    null
+                }
+                initializedApp ?: run {
+                    try {
+                        val options = FirebaseOptions.Builder()
+                            .setApplicationId("1:816327972299:android:com.aistudio.janmanchtea.jmt")
+                            .setProjectId("ais-dev-oebvpdp4g36ht6ckdip5kf")
+                            .setApiKey("AIzaSyDummyKeyForGracefulLocalInit")
+                            .build()
+                        FirebaseApp.initializeApp(context, options)
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+            } else {
+                FirebaseApp.getInstance()
+            }
+
+            if (app != null) {
+                FirebaseFirestore.getInstance(app)
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.d("FirestoreService", "Local database mode active: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * Listen to the "posts" collection in Firestore in real-time.
+     */
+    fun listenToPosts(): Flow<List<PostEntity>> = callbackFlow {
+        val db = firestore
+        if (db == null) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+
+        var listenerRegistration: ListenerRegistration? = null
+        try {
+            listenerRegistration = db.collection("posts")
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .limit(50)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.w("FirestoreService", "Listen failed: ${error.message}")
+                        return@addSnapshotListener
+                    }
+
+                    if (snapshot != null) {
+                        val posts = snapshot.documents.mapNotNull { doc ->
+                            try {
+                                val id = doc.getString("id") ?: doc.id
+                                val authorId = doc.getString("authorId") ?: "user_anon"
+                                val authorName = doc.getString("authorName") ?: "अनाम सदस्य"
+                                val authorUsername = doc.getString("authorUsername") ?: "user"
+                                val authorAvatarUrl = doc.getString("authorAvatarUrl") ?: ""
+                                val authorIsVerified = doc.getBoolean("authorIsVerified") ?: false
+                                val category = doc.getString("category") ?: "चाय और चर्चा"
+                                val content = doc.getString("content") ?: ""
+                                val imageUrl = doc.getString("imageUrl")
+                                val videoUrl = doc.getString("videoUrl")
+                                val videoDuration = doc.getString("videoDuration")
+                                val chaiMood = doc.getString("chaiMood") ?: "☕ कड़क मसाला चाय"
+                                val likesCount = (doc.getLong("likesCount") ?: 0L).toInt()
+                                val commentsCount = (doc.getLong("commentsCount") ?: 0L).toInt()
+                                val sharesCount = (doc.getLong("sharesCount") ?: 0L).toInt()
+                                val isPinned = doc.getBoolean("isPinned") ?: false
+                                val isReported = doc.getBoolean("isReported") ?: false
+                                val isHidden = doc.getBoolean("isHidden") ?: false
+                                val createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis()
+
+                                PostEntity(
+                                    id = id,
+                                    authorId = authorId,
+                                    authorName = authorName,
+                                    authorUsername = authorUsername,
+                                    authorAvatarUrl = authorAvatarUrl,
+                                    authorIsVerified = authorIsVerified,
+                                    category = category,
+                                    content = content,
+                                    imageUrl = imageUrl,
+                                    videoUrl = videoUrl,
+                                    videoDuration = videoDuration,
+                                    chaiMood = chaiMood,
+                                    likesCount = likesCount,
+                                    commentsCount = commentsCount,
+                                    sharesCount = sharesCount,
+                                    isLiked = false,
+                                    isSaved = false,
+                                    isPinned = isPinned,
+                                    isReported = isReported,
+                                    isHidden = isHidden,
+                                    createdAt = createdAt
+                                )
+                            } catch (e: Exception) {
+                                Log.w("FirestoreService", "Error parsing post doc: ${e.message}")
+                                null
+                            }
+                        }
+                        trySend(posts)
+                    }
+                }
+        } catch (e: Exception) {
+            Log.e("FirestoreService", "Error setting up listener: ${e.message}")
+        }
+
+        awaitClose {
+            listenerRegistration?.remove()
+        }
+    }
+
+    /**
+     * Publish a new post to Firestore database without altering existing collections or structure.
+     */
+    suspend fun savePost(post: PostEntity): Result<Unit> {
+        val db = firestore ?: return Result.failure(Exception("Firestore not initialized"))
+        return try {
+            val postMap = hashMapOf<String, Any?>(
+                "id" to post.id,
+                "authorId" to post.authorId,
+                "authorName" to post.authorName,
+                "authorUsername" to post.authorUsername,
+                "authorAvatarUrl" to post.authorAvatarUrl,
+                "authorIsVerified" to post.authorIsVerified,
+                "category" to post.category,
+                "content" to post.content,
+                "imageUrl" to post.imageUrl,
+                "videoUrl" to post.videoUrl,
+                "videoDuration" to post.videoDuration,
+                "chaiMood" to post.chaiMood,
+                "likesCount" to post.likesCount,
+                "commentsCount" to post.commentsCount,
+                "sharesCount" to post.sharesCount,
+                "isPinned" to post.isPinned,
+                "isReported" to post.isReported,
+                "isHidden" to post.isHidden,
+                "createdAt" to post.createdAt
+            )
+
+            db.collection("posts")
+                .document(post.id)
+                .set(postMap, SetOptions.merge())
+                .await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e("FirestoreService", "Failed to save post to Firestore: ${e.message}")
+            Result.failure(e)
+        }
+    }
+}
