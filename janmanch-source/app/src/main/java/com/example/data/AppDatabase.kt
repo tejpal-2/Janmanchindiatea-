@@ -9,6 +9,10 @@ import com.example.model.FollowEntity
 import com.example.model.NotificationEntity
 import com.example.model.PostEntity
 import com.example.model.ReportEntity
+import com.example.model.StoryEntity
+import com.example.model.ChatThreadEntity
+import com.example.model.ChatMessageEntity
+import com.example.model.CommunityItemEntity
 import com.example.model.UserEntity
 
 @Database(
@@ -18,9 +22,13 @@ import com.example.model.UserEntity
         CommentEntity::class,
         NotificationEntity::class,
         FollowEntity::class,
-        ReportEntity::class
+        ReportEntity::class,
+        StoryEntity::class,
+        ChatThreadEntity::class,
+        ChatMessageEntity::class,
+        CommunityItemEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -30,6 +38,9 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun notificationDao(): NotificationDao
     abstract fun followDao(): FollowDao
     abstract fun reportDao(): ReportDao
+    abstract fun storyDao(): StoryDao
+    abstract fun chatDao(): ChatDao
+    abstract fun communityDao(): CommunityDao
 
     companion object {
         @Volatile

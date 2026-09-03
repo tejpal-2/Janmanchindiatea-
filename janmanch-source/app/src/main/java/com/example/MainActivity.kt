@@ -35,6 +35,7 @@ import com.example.ui.components.JanmanchTopAppBar
 import com.example.ui.screens.AdminModerationScreen
 import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.CreatePostScreen
+import com.example.ui.screens.CommunityScreen
 import com.example.ui.screens.FeedScreen
 import com.example.ui.screens.NetworkScreen
 import com.example.ui.screens.NotificationsScreen
@@ -97,6 +98,12 @@ fun JanmanchApp(viewModel: JanmanchViewModel) {
     val savedPosts by viewModel.savedPosts.collectAsState()
     val snackbarMsg by viewModel.snackbarMessage.collectAsState()
     val adminModeEnabled by viewModel.adminModeEnabled.collectAsState()
+    val stories by viewModel.stories.collectAsState()
+    val reels by viewModel.reels.collectAsState()
+    val chatThreads by viewModel.chatThreads.collectAsState()
+    val selectedChatId by viewModel.selectedChatId.collectAsState()
+    val chatMessages by viewModel.chatMessages.collectAsState()
+    val communityItems by viewModel.communityItems.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -258,6 +265,25 @@ fun JanmanchApp(viewModel: JanmanchViewModel) {
                                     followerIds = followerIds,
                                     language = language,
                                     onFollowToggle = { viewModel.toggleFollow(it) }
+                                )
+                                NavTab.COMMUNITY -> CommunityScreen(
+                                    language = language,
+                                    currentUser = currentUser,
+                                    stories = stories,
+                                    reels = reels,
+                                    chats = chatThreads,
+                                    chatMessages = chatMessages,
+                                    selectedChatId = selectedChatId,
+                                    communityItems = communityItems,
+                                    reports = reports,
+                                    blockedUsers = blockedUsers,
+                                    onStoryViewed = { viewModel.markStoryViewed(it) },
+                                    onSelectChat = { viewModel.selectChat(it) },
+                                    onSendMessage = { viewModel.sendMessage(it) },
+                                    onOpenPost = { viewModel.openPostDetail(it) },
+                                    onOpenCreate = { viewModel.setTab(NavTab.CREATE) },
+                                    onOpenModeration = { viewModel.setTab(NavTab.ADMIN_MODERATION) },
+                                    onOpenSettings = { viewModel.setTab(NavTab.SETTINGS) }
                                 )
                                 NavTab.NOTIFICATIONS -> NotificationsScreen(
                                     notifications = notifications,

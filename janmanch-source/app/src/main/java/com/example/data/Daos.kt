@@ -10,6 +10,10 @@ import com.example.model.FollowEntity
 import com.example.model.NotificationEntity
 import com.example.model.PostEntity
 import com.example.model.ReportEntity
+import com.example.model.StoryEntity
+import com.example.model.ChatThreadEntity
+import com.example.model.ChatMessageEntity
+import com.example.model.CommunityItemEntity
 import com.example.model.UserEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -88,6 +92,9 @@ interface PostDao {
 
     @Query("SELECT * FROM posts WHERE isSaved = 1 AND isHidden = 0 ORDER BY createdAt DESC")
     fun getSavedPosts(): Flow<List<PostEntity>>
+
+    @Query("SELECT * FROM posts WHERE videoUrl IS NOT NULL AND videoUrl != '' AND isHidden = 0 ORDER BY createdAt DESC")
+    fun getReels(): Flow<List<PostEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPost(post: PostEntity)
@@ -193,4 +200,52 @@ interface ReportDao {
 
     @Query("DELETE FROM reports WHERE id = :id")
     suspend fun deleteReport(id: String)
+}
+
+@Dao
+interface StoryDao {
+    @Query("SELECT COUNT(*) FROM stories WHERE expiresAt > :now")
+    suspend fun countActive(now: Long = System.currentTimeMillis()): Int
+
+    @Query("SELECT * FROM stories WHERE expiresAt > :now ORDER BY createdAt DESC")
+    fun getActiveStories(now: Long = System.currentTimeMillis()): Flow<List<StoryEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertStories(stories: List<StoryEntity>)
+
+    @Query("UPDATE stories SET isViewed = 1 WHERE id = :id")
+    suspend fun markViewed(id: String)
+}
+
+@Dao
+interface ChatDao {
+    @Query("SELECT COUNT(*) FROM chat_threads")
+    suspend fun countThreads(): Int
+
+    @Query("SELECT * FROM chat_threads ORDER BY updatedAt DESC")
+    fun getThreads(): Flow<List<ChatThreadEntity>>
+
+    @Query("SELECT * FROM chat_messages WHERE threadId = :threadId ORDER BY sentAt ASC")
+    fun getMessages(threadId: String): Flow<List<ChatMessageEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertThreads(threads: List<ChatThreadEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMessage(message: ChatMessageEntity)
+
+    @Update
+    suspend fun updateThread(thread: ChatThreadEntity)
+}
+
+@Dao
+interface CommunityDao {
+    @Query("SELECT COUNT(*) FROM community_items")
+    suspend fun count(): Int
+
+    @Query("SELECT * FROM community_items ORDER BY createdAt DESC")
+    fun getItems(): Flow<List<CommunityItemEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertItems(items: List<CommunityItemEntity>)
 }

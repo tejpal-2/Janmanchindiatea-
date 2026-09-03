@@ -93,6 +93,52 @@ data class ReportEntity(
     val timestamp: Long = System.currentTimeMillis()
 )
 
+@Entity(tableName = "stories")
+data class StoryEntity(
+    @PrimaryKey val id: String,
+    val authorId: String,
+    val authorName: String,
+    val authorAvatarUrl: String = "",
+    val mediaUrl: String,
+    val caption: String = "",
+    val expiresAt: Long = System.currentTimeMillis() + 24 * 60 * 60 * 1000,
+    val isViewed: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "chat_threads")
+data class ChatThreadEntity(
+    @PrimaryKey val id: String,
+    val participantId: String,
+    val participantName: String,
+    val participantAvatarUrl: String = "",
+    val lastMessage: String = "",
+    val updatedAt: Long = System.currentTimeMillis(),
+    val unreadCount: Int = 0
+)
+
+@Entity(tableName = "chat_messages")
+data class ChatMessageEntity(
+    @PrimaryKey val id: String,
+    val threadId: String,
+    val senderId: String,
+    val senderName: String,
+    val text: String,
+    val sentAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "community_items")
+data class CommunityItemEntity(
+    @PrimaryKey val id: String,
+    val section: String,
+    val title: String,
+    val summary: String,
+    val authorName: String = "जनमंच टीम",
+    val imageUrl: String? = null,
+    val actionLabel: String = "",
+    val createdAt: Long = System.currentTimeMillis()
+)
+
 enum class AppLanguage {
     HINDI,
     ENGLISH
@@ -106,5 +152,6 @@ enum class NavTab {
     NOTIFICATIONS,
     PROFILE,
     SETTINGS,
-    ADMIN_MODERATION
+    ADMIN_MODERATION,
+    COMMUNITY
 }

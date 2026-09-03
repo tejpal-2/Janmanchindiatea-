@@ -6,6 +6,10 @@ import com.example.model.NotificationEntity
 import com.example.model.PostEntity
 import com.example.model.ReportEntity
 import com.example.model.UserEntity
+import com.example.model.StoryEntity
+import com.example.model.ChatThreadEntity
+import com.example.model.ChatMessageEntity
+import com.example.model.CommunityItemEntity
 import android.net.Uri
 import android.util.Patterns
 import kotlinx.coroutines.CoroutineScope
@@ -14,6 +18,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -31,6 +36,9 @@ class JanmanchRepository(
     private val notificationDao = database.notificationDao()
     private val followDao = database.followDao()
     private val reportDao = database.reportDao()
+    private val storyDao = database.storyDao()
+    private val chatDao = database.chatDao()
+    private val communityDao = database.communityDao()
 
     private val firestoreService = FirestoreService(context)
 
@@ -80,6 +88,12 @@ class JanmanchRepository(
             followDao.insertFollow(FollowEntity(followerId = "user_me", followedId = "user_2"))
             followDao.insertFollow(FollowEntity(followerId = "user_3", followedId = "user_me"))
         }
+        if (storyDao.countActive() == 0) storyDao.insertStories(SampleSeedData.initialStories)
+        if (chatDao.countThreads() == 0) {
+            chatDao.insertThreads(SampleSeedData.initialChatThreads)
+            SampleSeedData.initialChatMessages.forEach { chatDao.insertMessage(it) }
+        }
+        if (communityDao.count() == 0) communityDao.insertItems(SampleSeedData.initialCommunityItems)
     }
 
     // Auth
@@ -363,6 +377,40 @@ class JanmanchRepository(
 
     fun getFollowerIds(userId: String): Flow<Set<String>> =
         followDao.getFollowers(userId).map { it.map(FollowEntity::followerId).toSet() }
+
+    fun getStories(): Flow<List<StoryEntity>> = storyDao.getActiveStories()
+
+    fun getReels(): Flow<List<PostEntity>> = postDao.getReels()
+
+    suspend fun markStoryViewed(storyId: String) = withContext(Dispatchers.IO) {
+        storyDao.markViewed(storyId)
+    }
+
+    fun getChatThreads(): Flow<List<ChatThreadEntity>> = chatDao.getThreads()
+
+    fun getChatMessages(threadId: String): Flow<List<ChatMessageEntity>> =
+        chatDao.getMessages(threadId)
+
+    suspend fun sendMessage(threadId: String, text: String): Result<ChatMessageEntity> =
+        withContext(Dispatchers.IO) {
+            val sender = _currentUser.value ?: return@withContext Result.failure(Exception("Not logged in"))
+            val cleanText = text.trim()
+            if (cleanText.isBlank()) return@withContext Result.failure(Exception("Message cannot be empty"))
+            val message = ChatMessageEntity(
+                id = "message_" + UUID.randomUUID().toString().take(8),
+                threadId = threadId,
+                senderId = sender.id,
+                senderName = sender.fullName,
+                text = cleanText
+            )
+            chatDao.insertMessage(message)
+            chatDao.getThreads().first().firstOrNull { it.id == threadId }?.let {
+                chatDao.updateThread(it.copy(lastMessage = cleanText, updatedAt = message.sentAt, unreadCount = 0))
+            }
+            Result.success(message)
+        }
+
+    fun getCommunityItems(): Flow<List<CommunityItemEntity>> = communityDao.getItems()
 
     suspend fun toggleFollow(followedId: String) = withContext(Dispatchers.IO) {
         val current = _currentUser.value ?: return@withContext

@@ -12,6 +12,10 @@ import com.example.model.NotificationEntity
 import com.example.model.PostEntity
 import com.example.model.ReportEntity
 import com.example.model.UserEntity
+import com.example.model.StoryEntity
+import com.example.model.ChatThreadEntity
+import com.example.model.ChatMessageEntity
+import com.example.model.CommunityItemEntity
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -132,6 +136,28 @@ class JanmanchViewModel(application: Application) : AndroidViewModel(application
     val savedPosts: StateFlow<List<PostEntity>> = repository.getSavedPosts()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // Media, messaging and the connected community hub.
+    val stories: StateFlow<List<StoryEntity>> = repository.getStories()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val reels: StateFlow<List<PostEntity>> = repository.getReels()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val chatThreads: StateFlow<List<ChatThreadEntity>> = repository.getChatThreads()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _selectedChatId = MutableStateFlow<String?>(null)
+    val selectedChatId: StateFlow<String?> = _selectedChatId.asStateFlow()
+
+    val chatMessages: StateFlow<List<ChatMessageEntity>> = _selectedChatId
+        .flatMapLatest { id ->
+            if (id == null) flowOf(emptyList()) else repository.getChatMessages(id)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val communityItems: StateFlow<List<CommunityItemEntity>> = repository.getCommunityItems()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // Actions
     fun setLanguage(lang: AppLanguage) {
         _language.value = lang
@@ -245,6 +271,24 @@ class JanmanchViewModel(application: Application) : AndroidViewModel(application
     fun sharePost(postId: String) {
         viewModelScope.launch {
             repository.incrementShare(postId)
+        }
+    }
+
+    fun markStoryViewed(storyId: String) {
+        viewModelScope.launch { repository.markStoryViewed(storyId) }
+    }
+
+    fun selectChat(threadId: String?) {
+        _selectedChatId.value = threadId
+    }
+
+    fun sendMessage(text: String) {
+        val threadId = _selectedChatId.value ?: return
+        viewModelScope.launch {
+            val result = repository.sendMessage(threadId, text)
+            if (result.isFailure) {
+                showSnackbar(if (_language.value == AppLanguage.HINDI) "संदेश भेजने के लिए लॉग इन करें" else "Sign in to send messages")
+            }
         }
     }
 

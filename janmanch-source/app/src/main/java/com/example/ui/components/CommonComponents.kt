@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Notifications
@@ -234,6 +235,7 @@ fun JanmanchBottomNavigation(
             Triple(NavTab.SEARCH, Icons.Filled.Search, Icons.Outlined.Search),
             Triple(NavTab.CREATE, Icons.Filled.Add, Icons.Filled.Add),
             Triple(NavTab.NETWORK, Icons.Filled.People, Icons.Outlined.People),
+            Triple(NavTab.COMMUNITY, Icons.Filled.Explore, Icons.Filled.Explore),
             Triple(NavTab.PROFILE, Icons.Filled.Person, Icons.Outlined.Person)
         )
 
@@ -244,6 +246,7 @@ fun JanmanchBottomNavigation(
                 NavTab.SEARCH -> "tab_search"
                 NavTab.CREATE -> "tab_create"
                 NavTab.NETWORK -> "tab_network"
+                NavTab.COMMUNITY -> "tab_explore"
                 NavTab.PROFILE -> "tab_profile"
                 else -> "tab_home"
             }

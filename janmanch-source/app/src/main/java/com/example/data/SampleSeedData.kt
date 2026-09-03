@@ -4,6 +4,10 @@ import com.example.model.CommentEntity
 import com.example.model.NotificationEntity
 import com.example.model.PostEntity
 import com.example.model.UserEntity
+import com.example.model.StoryEntity
+import com.example.model.ChatThreadEntity
+import com.example.model.ChatMessageEntity
+import com.example.model.CommunityItemEntity
 
 object SampleSeedData {
 
@@ -246,5 +250,89 @@ object SampleSeedData {
             isRead = true,
             timestamp = System.currentTimeMillis() - 1000 * 60 * 60 * 24
         )
+    )
+
+    val initialStories = listOf(
+        StoryEntity(
+            id = "story_1",
+            authorId = "user_1",
+            authorName = "आनंद पटेल",
+            authorAvatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200",
+            mediaUrl = "https://images.unsplash.com/photo-1501004318641-b39e6451bec6?w=800",
+            caption = "आज खेत से सीधे जनमंच तक 🌾"
+        ),
+        StoryEntity(
+            id = "story_2",
+            authorId = "user_2",
+            authorName = "प्रिया शर्मा",
+            authorAvatarUrl = "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200",
+            mediaUrl = "https://images.unsplash.com/photo-1495020689067-958852a7765e?w=800",
+            caption = "आज की खबरों पर एक नजर"
+        ),
+        StoryEntity(
+            id = "story_3",
+            authorId = "user_me",
+            authorName = "Raju Meena",
+            authorAvatarUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200",
+            mediaUrl = "https://images.unsplash.com/photo-1544787219-7f47ccb76574?w=800",
+            caption = "चाय तैयार है, चर्चा शुरू करें ☕"
+        )
+    )
+
+    val initialChatThreads = listOf(
+        ChatThreadEntity(
+            id = "thread_1",
+            participantId = "user_2",
+            participantName = "प्रिया शर्मा",
+            participantAvatarUrl = "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200",
+            lastMessage = "आज की लाइव चर्चा में मिलते हैं।",
+            unreadCount = 1
+        ),
+        ChatThreadEntity(
+            id = "thread_2",
+            participantId = "user_1",
+            participantName = "आनंद पटेल",
+            participantAvatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200",
+            lastMessage = "खेती वाला लेख बहुत अच्छा लगा।"
+        )
+    )
+
+    val initialChatMessages = listOf(
+        ChatMessageEntity(
+            id = "message_1",
+            threadId = "thread_1",
+            senderId = "user_2",
+            senderName = "प्रिया शर्मा",
+            text = "आज की लाइव चर्चा में मिलते हैं।",
+            sentAt = System.currentTimeMillis() - 1000 * 60 * 12
+        ),
+        ChatMessageEntity(
+            id = "message_2",
+            threadId = "thread_1",
+            senderId = "user_me",
+            senderName = "Raju Meena",
+            text = "बिल्कुल, मैं भी जुड़ूंगा।",
+            sentAt = System.currentTimeMillis() - 1000 * 60 * 8
+        ),
+        ChatMessageEntity(
+            id = "message_3",
+            threadId = "thread_2",
+            senderId = "user_1",
+            senderName = "आनंद पटेल",
+            text = "खेती वाला लेख बहुत अच्छा लगा।",
+            sentAt = System.currentTimeMillis() - 1000 * 60 * 55
+        )
+    )
+
+    val initialCommunityItems = listOf(
+        CommunityItemEntity("hub_news_1", "NEWS", "आज की मुख्य खबरें", "देश, समाज और स्थानीय जनजीवन से जुड़ी विश्वसनीय खबरें।", actionLabel = "खबरें पढ़ें"),
+        CommunityItemEntity("hub_jobs_1", "JOBS", "जनमंच अवसर", "कौशल, रोजगार और स्वदेशी उद्यमों के नए अवसर खोजें।", actionLabel = "अवसर देखें"),
+        CommunityItemEntity("hub_media_1", "MEDIA", "जनमंच मीडिया", "वीडियो रिपोर्ट, फोटो स्टोरी और समुदाय की आवाज।", actionLabel = "मीडिया देखें"),
+        CommunityItemEntity("hub_live_1", "LIVE", "आज की लाइव चर्चा", "शाम 7 बजे: डिजिटल भारत और गांवों का भविष्य।", actionLabel = "रिमाइंडर लगाएं"),
+        CommunityItemEntity("hub_writing_1", "WRITING", "लेखन मंच", "कविता, निबंध और जमीनी अनुभव प्रकाशित करें।", actionLabel = "लिखना शुरू करें"),
+        CommunityItemEntity("hub_creator_1", "CREATOR", "क्रिएटर स्टूडियो", "रील्स, स्टोरी और पोस्ट के लिए अपने दर्शक बनाएं।", actionLabel = "क्रिएटर बनें"),
+        CommunityItemEntity("hub_admin_1", "ADMIN", "एडमिन डैशबोर्ड", "मॉडरेशन कतार, रिपोर्ट और समुदाय की सुरक्षा देखें।", actionLabel = "डैशबोर्ड खोलें"),
+        CommunityItemEntity("hub_report_1", "REPORT", "रिपोर्ट केंद्र", "गलत सूचना, स्पैम या दुर्व्यवहार की सुरक्षित रिपोर्ट करें।", actionLabel = "रिपोर्ट नीति"),
+        CommunityItemEntity("hub_block_1", "BLOCK", "ब्लॉक और सुरक्षा", "ब्लॉक किए गए खातों और अपनी सुरक्षा सेटिंग्स प्रबंधित करें।", actionLabel = "सुरक्षा खोलें")
     )
 }
