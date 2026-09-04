@@ -258,7 +258,14 @@ class JanmanchViewModel(application: Application) : AndroidViewModel(application
                 showSnackbar(if (_language.value == AppLanguage.HINDI) "चर्चा प्रकाशित हो गई! ☕" else "Charcha published! ☕")
                 _currentTab.value = NavTab.FEED
             } else {
-                showSnackbar("कृपया पहले लॉग इन करें")
+                showSnackbar(
+                    res.exceptionOrNull()?.message
+                        ?: if (_language.value == AppLanguage.HINDI) {
+                            "पोस्ट प्रकाशित नहीं हो सकी"
+                        } else {
+                            "Post could not be published"
+                        }
+                )
             }
         }
     }

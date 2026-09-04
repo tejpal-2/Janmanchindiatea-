@@ -249,10 +249,18 @@ class JanmanchRepository(
             return@withContext Result.failure(Exception("Post content cannot be empty"))
         }
         val uploadedImage = imageUrl?.takeIf { it.startsWith("content://") }?.let {
-            firestoreService.uploadMedia(Uri.parse(it), author.id, "images").getOrNull()
+            firestoreService.uploadMedia(Uri.parse(it), author.id, "images").getOrElse { error ->
+                return@withContext Result.failure(
+                    Exception("Photo upload failed. Check your connection and Firebase Storage setup.", error)
+                )
+            }
         }
         val uploadedVideo = videoUrl?.takeIf { it.startsWith("content://") }?.let {
-            firestoreService.uploadMedia(Uri.parse(it), author.id, "videos").getOrNull()
+            firestoreService.uploadMedia(Uri.parse(it), author.id, "videos").getOrElse { error ->
+                return@withContext Result.failure(
+                    Exception("Video upload failed. Check your connection and Firebase Storage setup.", error)
+                )
+            }
         }
         val newPost = PostEntity(
             id = "post_" + UUID.randomUUID().toString().take(8),
