@@ -97,9 +97,7 @@ class FirestoreService(private val context: Context) {
     }
 
     suspend fun saveUser(user: UserEntity): Result<Unit> {
-        val db = firestore ?: return Result.failure(Exception("Firestore not initialized"))
-        return try {
-            val userMap = hashMapOf<String, Any?>(
+        return writeDocument("users", user.id, hashMapOf(
                 "id" to user.id,
                 "username" to user.username,
                 "fullName" to user.fullName,
@@ -113,11 +111,83 @@ class FirestoreService(private val context: Context) {
                 "chaiPoints" to user.chaiPoints,
                 "isVerified" to user.isVerified,
                 "joinedDate" to user.joinedDate
-            )
-            db.collection("users").document(user.id).set(userMap, SetOptions.merge()).await()
+            ))
+    }
+
+    suspend fun saveComment(comment: com.example.model.CommentEntity): Result<Unit> =
+        writeDocument("comments", comment.id, mapOf(
+            "id" to comment.id, "postId" to comment.postId, "authorId" to comment.authorId,
+            "authorName" to comment.authorName, "authorUsername" to comment.authorUsername,
+            "authorAvatarUrl" to comment.authorAvatarUrl, "text" to comment.text,
+            "createdAt" to comment.createdAt
+        ))
+
+    suspend fun saveFollow(follow: com.example.model.FollowEntity, following: Boolean): Result<Unit> {
+        val id = "${follow.followerId}_${follow.followedId}"
+        return if (following) writeDocument("follows", id, mapOf(
+            "id" to id, "followerId" to follow.followerId, "followedId" to follow.followedId,
+            "createdAt" to follow.createdAt
+        )) else deleteDocument("follows", id)
+    }
+
+    suspend fun saveNotification(notification: com.example.model.NotificationEntity): Result<Unit> =
+        writeDocument("notifications", notification.id, mapOf(
+            "id" to notification.id, "userId" to notification.userId, "type" to notification.type,
+            "senderName" to notification.senderName, "senderAvatarUrl" to notification.senderAvatarUrl,
+            "title" to notification.title, "message" to notification.message,
+            "relatedPostId" to notification.relatedPostId, "isRead" to notification.isRead,
+            "timestamp" to notification.timestamp
+        ))
+
+    suspend fun saveReport(report: com.example.model.ReportEntity): Result<Unit> =
+        writeDocument("reports", report.id, mapOf(
+            "id" to report.id, "postId" to report.postId, "postSnippet" to report.postSnippet,
+            "reportedByUserId" to report.reportedByUserId, "reportedByUserName" to report.reportedByUserName,
+            "reason" to report.reason, "status" to report.status, "timestamp" to report.timestamp
+        ))
+
+    suspend fun saveStory(story: com.example.model.StoryEntity): Result<Unit> =
+        writeDocument("stories", story.id, mapOf(
+            "id" to story.id, "authorId" to story.authorId, "authorName" to story.authorName,
+            "authorAvatarUrl" to story.authorAvatarUrl, "mediaUrl" to story.mediaUrl,
+            "caption" to story.caption, "expiresAt" to story.expiresAt,
+            "createdAt" to story.createdAt
+        ))
+
+    suspend fun saveStoryView(storyId: String, userId: String): Result<Unit> =
+        writeDocument("stories/$storyId/views", userId, mapOf(
+            "userId" to userId,
+            "viewedAt" to System.currentTimeMillis()
+        ))
+
+    suspend fun saveChatMessage(message: com.example.model.ChatMessageEntity): Result<Unit> =
+        writeDocument("chat_messages", message.id, mapOf(
+            "id" to message.id, "threadId" to message.threadId, "senderId" to message.senderId,
+            "senderName" to message.senderName, "text" to message.text, "sentAt" to message.sentAt
+        ))
+
+    private suspend fun writeDocument(
+        collection: String,
+        id: String,
+        data: Map<String, Any?>
+    ): Result<Unit> {
+        val db = firestore ?: return Result.failure(Exception("Firestore not initialized"))
+        return try {
+            db.collection(collection).document(id).set(data, SetOptions.merge()).await()
             Result.success(Unit)
         } catch (e: Exception) {
-            Log.e("FirestoreService", "Failed to save user to Firestore: ${e.message}")
+            Log.e("FirestoreService", "Failed to write $collection/$id: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    private suspend fun deleteDocument(collection: String, id: String): Result<Unit> {
+        val db = firestore ?: return Result.failure(Exception("Firestore not initialized"))
+        return try {
+            db.collection(collection).document(id).delete().await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e("FirestoreService", "Failed to delete $collection/$id: ${e.message}")
             Result.failure(e)
         }
     }

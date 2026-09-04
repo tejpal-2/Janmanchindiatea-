@@ -104,6 +104,7 @@ fun JanmanchApp(viewModel: JanmanchViewModel) {
     val selectedChatId by viewModel.selectedChatId.collectAsState()
     val chatMessages by viewModel.chatMessages.collectAsState()
     val communityItems by viewModel.communityItems.collectAsState()
+    val creatorEarnings by viewModel.creatorEarnings.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -275,6 +276,7 @@ fun JanmanchApp(viewModel: JanmanchViewModel) {
                                     chatMessages = chatMessages,
                                     selectedChatId = selectedChatId,
                                     communityItems = communityItems,
+                                    earnings = creatorEarnings,
                                     reports = reports,
                                     blockedUsers = blockedUsers,
                                     onStoryViewed = { viewModel.markStoryViewed(it) },

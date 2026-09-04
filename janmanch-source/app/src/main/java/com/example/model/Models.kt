@@ -139,6 +139,19 @@ data class CommunityItemEntity(
     val createdAt: Long = System.currentTimeMillis()
 )
 
+@Entity(tableName = "creator_earnings")
+data class CreatorEarningsEntity(
+    @PrimaryKey val id: String,
+    val creatorId: String,
+    val periodLabel: String,
+    val tips: Int = 0,
+    val sponsoredPosts: Int = 0,
+    val liveSessions: Int = 0,
+    val totalPoints: Int = 0,
+    val status: String = "AVAILABLE",
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
 enum class AppLanguage {
     HINDI,
     ENGLISH

@@ -13,6 +13,7 @@ import com.example.model.StoryEntity
 import com.example.model.ChatThreadEntity
 import com.example.model.ChatMessageEntity
 import com.example.model.CommunityItemEntity
+import com.example.model.CreatorEarningsEntity
 import com.example.model.UserEntity
 
 @Database(
@@ -26,9 +27,10 @@ import com.example.model.UserEntity
         StoryEntity::class,
         ChatThreadEntity::class,
         ChatMessageEntity::class,
-        CommunityItemEntity::class
+        CommunityItemEntity::class,
+        CreatorEarningsEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -41,6 +43,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun storyDao(): StoryDao
     abstract fun chatDao(): ChatDao
     abstract fun communityDao(): CommunityDao
+    abstract fun earningsDao(): EarningsDao
 
     companion object {
         @Volatile

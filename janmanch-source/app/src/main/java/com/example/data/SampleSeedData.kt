@@ -8,6 +8,7 @@ import com.example.model.StoryEntity
 import com.example.model.ChatThreadEntity
 import com.example.model.ChatMessageEntity
 import com.example.model.CommunityItemEntity
+import com.example.model.CreatorEarningsEntity
 
 object SampleSeedData {
 
@@ -334,5 +335,27 @@ object SampleSeedData {
         CommunityItemEntity("hub_admin_1", "ADMIN", "एडमिन डैशबोर्ड", "मॉडरेशन कतार, रिपोर्ट और समुदाय की सुरक्षा देखें।", actionLabel = "डैशबोर्ड खोलें"),
         CommunityItemEntity("hub_report_1", "REPORT", "रिपोर्ट केंद्र", "गलत सूचना, स्पैम या दुर्व्यवहार की सुरक्षित रिपोर्ट करें।", actionLabel = "रिपोर्ट नीति"),
         CommunityItemEntity("hub_block_1", "BLOCK", "ब्लॉक और सुरक्षा", "ब्लॉक किए गए खातों और अपनी सुरक्षा सेटिंग्स प्रबंधित करें।", actionLabel = "सुरक्षा खोलें")
+    )
+
+    val initialCreatorEarnings = listOf(
+        CreatorEarningsEntity(
+            id = "earnings_user_me_2026_08",
+            creatorId = "user_me",
+            periodLabel = "अगस्त 2026",
+            tips = 420,
+            sponsoredPosts = 2,
+            liveSessions = 3,
+            totalPoints = 1860
+        ),
+        CreatorEarningsEntity(
+            id = "earnings_user_me_2026_07",
+            creatorId = "user_me",
+            periodLabel = "जुलाई 2026",
+            tips = 310,
+            sponsoredPosts = 1,
+            liveSessions = 2,
+            totalPoints = 1240,
+            status = "PAID"
+        )
     )
 }

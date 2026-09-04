@@ -14,6 +14,7 @@ import com.example.model.StoryEntity
 import com.example.model.ChatThreadEntity
 import com.example.model.ChatMessageEntity
 import com.example.model.CommunityItemEntity
+import com.example.model.CreatorEarningsEntity
 import com.example.model.UserEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -248,4 +249,16 @@ interface CommunityDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertItems(items: List<CommunityItemEntity>)
+}
+
+@Dao
+interface EarningsDao {
+    @Query("SELECT COUNT(*) FROM creator_earnings")
+    suspend fun count(): Int
+
+    @Query("SELECT * FROM creator_earnings WHERE creatorId = :creatorId ORDER BY updatedAt DESC")
+    fun getForCreator(creatorId: String): Flow<List<CreatorEarningsEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(items: List<CreatorEarningsEntity>)
 }

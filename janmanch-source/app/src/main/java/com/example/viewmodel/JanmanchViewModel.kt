@@ -1,6 +1,7 @@
 package com.example.viewmodel
 
 import android.app.Application
+import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.AppDatabase
@@ -16,6 +17,7 @@ import com.example.model.StoryEntity
 import com.example.model.ChatThreadEntity
 import com.example.model.ChatMessageEntity
 import com.example.model.CommunityItemEntity
+import com.example.model.CreatorEarningsEntity
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -158,6 +160,12 @@ class JanmanchViewModel(application: Application) : AndroidViewModel(application
     val communityItems: StateFlow<List<CommunityItemEntity>> = repository.getCommunityItems()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val creatorEarnings: StateFlow<List<CreatorEarningsEntity>> = currentUser
+        .flatMapLatest { user ->
+            if (user == null) flowOf(emptyList()) else repository.getCreatorEarnings(user.id)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // Actions
     fun setLanguage(lang: AppLanguage) {
         _language.value = lang
@@ -271,6 +279,16 @@ class JanmanchViewModel(application: Application) : AndroidViewModel(application
     fun sharePost(postId: String) {
         viewModelScope.launch {
             repository.incrementShare(postId)
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, "https://janmanch.in/posts/$postId")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            getApplication<Application>().startActivity(
+                Intent.createChooser(shareIntent, "Share Janmanch post").apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            )
         }
     }
 

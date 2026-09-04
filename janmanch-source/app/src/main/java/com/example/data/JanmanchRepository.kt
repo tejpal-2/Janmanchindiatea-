@@ -10,6 +10,7 @@ import com.example.model.StoryEntity
 import com.example.model.ChatThreadEntity
 import com.example.model.ChatMessageEntity
 import com.example.model.CommunityItemEntity
+import com.example.model.CreatorEarningsEntity
 import android.net.Uri
 import android.util.Patterns
 import kotlinx.coroutines.CoroutineScope
@@ -39,6 +40,7 @@ class JanmanchRepository(
     private val storyDao = database.storyDao()
     private val chatDao = database.chatDao()
     private val communityDao = database.communityDao()
+    private val earningsDao = database.earningsDao()
 
     private val firestoreService = FirestoreService(context)
 
@@ -48,9 +50,11 @@ class JanmanchRepository(
     init {
         coroutineScope.launch {
             seedInitialDataIfNeeded()
-            firestoreService.signedInEmail()?.let { email ->
-                userDao.getUserByEmail(email)?.let { _currentUser.value = it }
-            }
+            val signedInEmail = firestoreService.signedInEmail()
+            val savedId = context.getSharedPreferences("janmanch_session", android.content.Context.MODE_PRIVATE)
+                .getString("user_id", null)
+            (savedId?.let { userDao.getUserByIdDirect(it) }
+                ?: signedInEmail?.let { userDao.getUserByEmail(it) })?.let { _currentUser.value = it }
             syncRemoteFirestorePosts()
         }
     }
@@ -94,6 +98,7 @@ class JanmanchRepository(
             SampleSeedData.initialChatMessages.forEach { chatDao.insertMessage(it) }
         }
         if (communityDao.count() == 0) communityDao.insertItems(SampleSeedData.initialCommunityItems)
+        if (earningsDao.count() == 0) earningsDao.insertAll(SampleSeedData.initialCreatorEarnings)
     }
 
     // Auth
@@ -105,6 +110,7 @@ class JanmanchRepository(
         val user = userDao.getUserByEmail(cleanEmail)
         if (user != null && passwordsMatch(user.passwordHash, password)) {
             _currentUser.value = user
+            saveSession(user)
             Result.success(user)
         } else {
             val firebaseResult = firestoreService.signIn(cleanEmail, password)
@@ -124,6 +130,7 @@ class JanmanchRepository(
             userDao.insertUser(remoteUser)
             firestoreService.saveUser(remoteUser)
             _currentUser.value = remoteUser
+            saveSession(remoteUser)
             Result.success(remoteUser)
         }
     }
@@ -181,7 +188,14 @@ class JanmanchRepository(
 
     fun logout() {
         firestoreService.signOut()
+        context.getSharedPreferences("janmanch_session", android.content.Context.MODE_PRIVATE)
+            .edit().clear().apply()
         _currentUser.value = null
+    }
+
+    private fun saveSession(user: UserEntity) {
+        context.getSharedPreferences("janmanch_session", android.content.Context.MODE_PRIVATE)
+            .edit().putString("user_id", user.id).apply()
     }
 
     suspend fun updateProfile(
@@ -342,23 +356,24 @@ class JanmanchRepository(
             createdAt = System.currentTimeMillis()
         )
         commentDao.insertComment(comment)
+        firestoreService.saveComment(comment)
         postDao.incrementComments(postId)
         firestoreService.incrementPostMetric(postId, "commentsCount", 1)
 
         if (post.authorId != author.id) {
-            notificationDao.insertNotification(
-                NotificationEntity(
-                    id = "notif_" + UUID.randomUUID().toString().take(8),
-                    userId = post.authorId,
-                    type = "COMMENT",
-                    senderName = author.fullName,
-                    senderAvatarUrl = author.avatarUrl,
-                    title = "नई टिप्पणी",
-                    message = "${author.fullName} ने आपकी पोस्ट पर टिप्पणी की: \"${cleanText.take(30)}…\"",
-                    relatedPostId = postId,
-                    timestamp = System.currentTimeMillis()
-                )
+            val notification = NotificationEntity(
+                id = "notif_" + UUID.randomUUID().toString().take(8),
+                userId = post.authorId,
+                type = "COMMENT",
+                senderName = author.fullName,
+                senderAvatarUrl = author.avatarUrl,
+                title = "नई टिप्पणी",
+                message = "${author.fullName} ने आपकी पोस्ट पर टिप्पणी की: \"${cleanText.take(30)}…\"",
+                relatedPostId = postId,
+                timestamp = System.currentTimeMillis()
             )
+            notificationDao.insertNotification(notification)
+            firestoreService.saveNotification(notification)
         }
 
         Result.success(comment)
@@ -384,6 +399,7 @@ class JanmanchRepository(
 
     suspend fun markStoryViewed(storyId: String) = withContext(Dispatchers.IO) {
         storyDao.markViewed(storyId)
+        _currentUser.value?.let { firestoreService.saveStoryView(storyId, it.id) }
     }
 
     fun getChatThreads(): Flow<List<ChatThreadEntity>> = chatDao.getThreads()
@@ -404,6 +420,7 @@ class JanmanchRepository(
                 text = cleanText
             )
             chatDao.insertMessage(message)
+            firestoreService.saveChatMessage(message)
             chatDao.getThreads().first().firstOrNull { it.id == threadId }?.let {
                 chatDao.updateThread(it.copy(lastMessage = cleanText, updatedAt = message.sentAt, unreadCount = 0))
             }
@@ -412,6 +429,9 @@ class JanmanchRepository(
 
     fun getCommunityItems(): Flow<List<CommunityItemEntity>> = communityDao.getItems()
 
+    fun getCreatorEarnings(creatorId: String): Flow<List<CreatorEarningsEntity>> =
+        earningsDao.getForCreator(creatorId)
+
     suspend fun toggleFollow(followedId: String) = withContext(Dispatchers.IO) {
         val current = _currentUser.value ?: return@withContext
         val currentId = current.id
@@ -419,15 +439,16 @@ class JanmanchRepository(
         val isFollowed = followDao.isFollowingDirect(currentId, followedId)
         if (isFollowed) {
             followDao.deleteFollow(currentId, followedId)
+            firestoreService.saveFollow(FollowEntity(currentId, followedId), false)
             userDao.changeFollowing(currentId, -1)
             userDao.changeFollowers(followedId, -1)
         } else {
             followDao.insertFollow(FollowEntity(currentId, followedId))
+            firestoreService.saveFollow(FollowEntity(currentId, followedId), true)
             userDao.changeFollowing(currentId, 1)
             userDao.changeFollowers(followedId, 1)
             // Send notif
-            notificationDao.insertNotification(
-                NotificationEntity(
+            val notification = NotificationEntity(
                     id = "notif_" + UUID.randomUUID().toString().take(8),
                     userId = followedId,
                     type = "FOLLOW",
@@ -437,7 +458,8 @@ class JanmanchRepository(
                     message = "${current.fullName} ने आपको फॉलो करना शुरू किया है।",
                     timestamp = System.currentTimeMillis()
                 )
-            )
+            notificationDao.insertNotification(notification)
+            firestoreService.saveNotification(notification)
         }
         userDao.getUserByIdDirect(currentId)?.let {
             _currentUser.value = it
@@ -493,6 +515,7 @@ class JanmanchRepository(
             timestamp = System.currentTimeMillis()
         )
         reportDao.insertReport(report)
+        firestoreService.saveReport(report)
         postDao.setReported(postId, true)
     }
 

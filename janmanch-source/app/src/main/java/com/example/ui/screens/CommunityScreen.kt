@@ -60,6 +60,7 @@ import com.example.model.AppLanguage
 import com.example.model.ChatMessageEntity
 import com.example.model.ChatThreadEntity
 import com.example.model.CommunityItemEntity
+import com.example.model.CreatorEarningsEntity
 import com.example.model.PostEntity
 import com.example.model.ReportEntity
 import com.example.model.StoryEntity
@@ -79,6 +80,7 @@ private val hubFilters = listOf(
     HubFilter("LIVE", "लाइव", "Live"),
     HubFilter("WRITING", "लेखन", "Writing"),
     HubFilter("CREATOR", "क्रिएटर", "Creator"),
+    HubFilter("EARNINGS", "कमाई", "Earnings"),
     HubFilter("ADMIN", "एडमिन", "Admin"),
     HubFilter("REPORT", "रिपोर्ट", "Report"),
     HubFilter("BLOCK", "ब्लॉक", "Block")
@@ -94,6 +96,7 @@ fun CommunityScreen(
     chatMessages: List<ChatMessageEntity>,
     selectedChatId: String?,
     communityItems: List<CommunityItemEntity>,
+    earnings: List<CreatorEarningsEntity>,
     reports: List<ReportEntity>,
     blockedUsers: List<UserEntity>,
     onStoryViewed: (String) -> Unit,
@@ -170,6 +173,7 @@ fun CommunityScreen(
                     messageText = ""
                 }
             )
+            "EARNINGS" -> EarningsContent(earnings = earnings, hindi = hindi)
             else -> HubSectionContent(
                 section = selectedFilter,
                 items = communityItems.filter { it.section == selectedFilter },
@@ -180,6 +184,82 @@ fun CommunityScreen(
                 onOpenModeration = onOpenModeration,
                 onOpenSettings = onOpenSettings
             )
+        }
+
+    }
+}
+
+@Composable
+private fun EarningsContent(
+    earnings: List<CreatorEarningsEntity>,
+    hindi: Boolean
+) {
+    val total = earnings.sumOf { it.totalPoints }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = ChaiTerracotta)) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = if (hindi) "क्रिएटर कमाई" else "Creator earnings",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Text(
+                        text = if (hindi) "कुल चाय पॉइंट्स: $total" else "Total chai points: $total",
+                        color = Color.White,
+                        modifier = Modifier.padding(top = 6.dp)
+                    )
+                    Text(
+                        text = if (hindi) "टिप्स, प्रायोजित पोस्ट और लाइव सत्र का स्थानीय सारांश" else "Local summary of tips, sponsored posts and live sessions",
+                        color = Color.White.copy(alpha = 0.85f),
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
+        if (earnings.isEmpty()) {
+            item {
+                Text(
+                    text = if (hindi) "कमाई का डेटा उपलब्ध नहीं है।" else "No earnings data yet.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        items(earnings, key = { it.id }) { period ->
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(period.periodLabel, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        Text(
+                            text = if (period.status == "PAID") {
+                                if (hindi) "भुगतान हुआ" else "Paid"
+                            } else {
+                                if (hindi) "उपलब्ध" else "Available"
+                            },
+                            color = ChaiTerracotta,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = if (hindi) {
+                            "टिप्स ${period.tips} • प्रायोजित पोस्ट ${period.sponsoredPosts} • लाइव ${period.liveSessions}"
+                        } else {
+                            "Tips ${period.tips} • Sponsored ${period.sponsoredPosts} • Live ${period.liveSessions}"
+                        },
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        text = if (hindi) "पॉइंट्स: ${period.totalPoints}" else "Points: ${period.totalPoints}",
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+            }
         }
     }
 }
