@@ -1,0 +1,48 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function ownsUser(userId) { return signedIn() && request.auth.uid == userId; }
+
+    match /users/{userId} {
+      allow read: if signedIn();
+      allow create: if ownsUser(userId);
+      allow update: if ownsUser(userId);
+    }
+    match /posts/{postId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.authorId == request.auth.uid;
+      allow update, delete: if signedIn() && resource.data.authorId == request.auth.uid;
+    }
+    match /comments/{commentId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.authorId == request.auth.uid;
+      allow delete: if signedIn() && resource.data.authorId == request.auth.uid;
+    }
+    match /follows/{followId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.followerId == request.auth.uid;
+      allow delete: if signedIn() && resource.data.followerId == request.auth.uid;
+    }
+    match /notifications/{notificationId} {
+      allow read, update, delete: if signedIn() && resource.data.userId == request.auth.uid;
+      allow create: if signedIn();
+    }
+    match /reports/{reportId} {
+      allow create: if signedIn() && request.resource.data.reportedByUserId == request.auth.uid;
+      allow read, update: if signedIn();
+    }
+    match /stories/{storyId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.authorId == request.auth.uid;
+      allow update, delete: if signedIn() && resource.data.authorId == request.auth.uid;
+      match /views/{userId} {
+        allow create: if ownsUser(userId);
+        allow read: if signedIn();
+      }
+    }
+    match /chat_messages/{messageId} {
+      allow read, create: if signedIn();
+    }
+  }
+}

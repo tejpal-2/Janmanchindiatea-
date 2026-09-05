@@ -14,14 +14,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract project ZIP
-        run: |
-          rm -rf android-project
-          mkdir -p android-project
-          unzip -q janmanch-india-tea.zip -d android-project
-
       - name: Fix project for CI
-        working-directory: android-project
+        working-directory: janmanch-source
         run: |
           # Fix KSP 2.3.5 CI problem
           sed -i -E 's/^(googleDevtoolsKsp[[:space:]]*=[[:space:]]*")[^"]+/\12.3.6/' gradle/libs.versions.toml
@@ -49,7 +43,7 @@ jobs:
           echo "$HOME/gradle-9.3.1/bin" >> "$GITHUB_PATH"
 
       - name: Build Debug APK
-        working-directory: android-project
+        working-directory: janmanch-source
         run: |
           gradle --version
           gradle assembleDebug --stacktrace --no-daemon --no-configuration-cache
@@ -58,5 +52,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Janmanch-Debug-APK
-          path: android-project/**/build/outputs/apk/**/*.apk
+          path: janmanch-source/**/build/outputs/apk/**/*.apk
           if-no-files-found: error

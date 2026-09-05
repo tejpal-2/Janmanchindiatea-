@@ -1,0 +1,6 @@
+{
+  "name": "Janmanch India Tea",
+  "description": "Janmanch India Tea is a Hindi-first community and social media app featuring feeds, rich multimedia posts, discussions, likes, comments, user profiles, notifications, and moderation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
