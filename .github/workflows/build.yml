@@ -88,14 +88,17 @@ jobs:
 
           cd "$PROJECT_DIR"
 
+          echo "===== GRADLE VERSION ====="
           gradle --version
+
+          echo "===== BUILDING DEBUG APK ====="
 
           gradle assembleDebug \
             --stacktrace \
             --no-daemon \
             --no-configuration-cache
 
-      - name: Get SHA-256 from APK certificate
+      - name: Get SHA-256 from APK
         shell: bash
         run: |
           set -e
@@ -112,29 +115,25 @@ jobs:
 
           echo "APK: $APK_FILE"
 
-          echo "===== FINDING SIGNING CERTIFICATE ====="
+          echo ""
+          echo "===== FINDING APKSIGNER ====="
 
-          CERT_ENTRY="$(unzip -Z1 "$APK_FILE" | \
-            grep -E '^META-INF/[^/]+\.(RSA|DSA|EC)$' | head -n 1)"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" \
+            -type f -name "apksigner" 2>/dev/null | sort -V | tail -n 1)"
 
-          if [ -z "$CERT_ENTRY" ]; then
-            echo "ERROR: APK signing certificate was not found."
+          if [ -z "$APKSIGNER" ]; then
+            echo "ERROR: apksigner was not found."
             exit 1
           fi
 
-          echo "Certificate: $CERT_ENTRY"
-
-          rm -f /tmp/janmanch-cert
-
-          unzip -p "$APK_FILE" "$CERT_ENTRY" > /tmp/janmanch-cert
+          echo "apksigner: $APKSIGNER"
 
           echo ""
           echo "=========================================="
           echo "JANMANCH SHA-256 FINGERPRINT"
           echo "=========================================="
 
-          keytool -printcert -file /tmp/janmanch-cert | \
-            awk -F': ' 'BEGIN{IGNORECASE=1} /SHA256/ {print "SHA-256: " $2}'
+          "$APKSIGNER" verify --print-certs "$APK_FILE"
 
           echo "=========================================="
 
