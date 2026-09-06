@@ -8,54 +8,78 @@ on:
 
 jobs:
   build:
-    name: Build
+    name: Build Android APK
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Inspect Android project
+      - name: Find Android Gradle project
+        id: project
+        shell: bash
         run: |
-          echo "===== ROOT FILES ====="
-          ls -la
+          set -e
 
-          echo "===== PROJECT STRUCTURE ====="
-          find . -maxdepth 3 -type f \( \
-            -name "settings.gradle" \
-            -o -name "settings.gradle.kts" \
-            -o -name "build.gradle" \
-            -o -name "build.gradle.kts" \
-            -o -name "libs.versions.toml" \
-            -o -name "gradlew" \
-          \) -print
+          echo "===== SEARCHING FOR SETTINGS FILE ====="
 
-          echo "===== APP DIRECTORY ====="
-          if [ -d "app" ]; then
-            ls -la app
-          else
-            echo "WARNING: root app directory not found"
+          SETTINGS_FILE="$(find . -type f \( \
+            -name "settings.gradle.kts" \
+            -o -name "settings.gradle" \
+          \) -not -path "./.git/*" | head -n 1)"
+
+          if [ -z "$SETTINGS_FILE" ]; then
+            echo "ERROR: settings.gradle.kts or settings.gradle was not found."
+            echo "===== REPOSITORY FILES ====="
+            find . -maxdepth 4 -type f | head -n 300
+            exit 1
           fi
+
+          PROJECT_DIR="$(dirname "$SETTINGS_FILE")"
+          PROJECT_DIR="${PROJECT_DIR#./}"
+
+          if [ -z "$PROJECT_DIR" ]; then
+            PROJECT_DIR="."
+          fi
+
+          echo "Found settings file: $SETTINGS_FILE"
+          echo "Gradle project directory: $PROJECT_DIR"
+
+          echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+
+          echo "===== PROJECT DIRECTORY ====="
+          ls -la "$PROJECT_DIR"
 
       - name: Fix KSP and signing configuration
+        shell: bash
         run: |
-          if [ -f "gradle/libs.versions.toml" ]; then
-            sed -i -E 's/^(googleDevtoolsKsp[[:space:]]*=[[:space:]]*")[^"]+/\12.3.6/' gradle/libs.versions.toml || true
-            sed -i -E 's/^(ksp[[:space:]]*=[[:space:]]*")[^"]+/\12.3.6/' gradle/libs.versions.toml || true
+          set -e
+
+          PROJECT_DIR="${{ steps.project.outputs.project_dir }}"
+
+          echo "Using project directory: $PROJECT_DIR"
+
+          if [ -f "$PROJECT_DIR/gradle/libs.versions.toml" ]; then
+            sed -i -E 's/^(googleDevtoolsKsp[[:space:]]*=[[:space:]]*")[^"]+/\12.3.6/' \
+              "$PROJECT_DIR/gradle/libs.versions.toml" || true
+
+            sed -i -E 's/^(ksp[[:space:]]*=[[:space:]]*")[^"]+/\12.3.6/' \
+              "$PROJECT_DIR/gradle/libs.versions.toml" || true
+
+            echo "===== KSP VERSION ====="
+            grep -n -E 'googleDevtoolsKsp|^[[:space:]]*ksp[[:space:]]*=' \
+              "$PROJECT_DIR/gradle/libs.versions.toml" || true
           fi
 
-          if [ -f "app/build.gradle.kts" ]; then
-            sed -i '/signingConfig = signingConfigs.getByName("debugConfig")/d' app/build.gradle.kts
-          fi
-
-          echo "===== KSP VERSION ====="
-          if [ -f "gradle/libs.versions.toml" ]; then
-            grep -n -E 'googleDevtoolsKsp|^[[:space:]]*ksp[[:space:]]*=' gradle/libs.versions.toml || true
+          if [ -f "$PROJECT_DIR/app/build.gradle.kts" ]; then
+            sed -i '/signingConfig = signingConfigs.getByName("debugConfig")/d' \
+              "$PROJECT_DIR/app/build.gradle.kts"
           fi
 
           echo "===== SIGNING CHECK ====="
-          if [ -f "app/build.gradle.kts" ]; then
-            grep -n 'signingConfig.*debugConfig' app/build.gradle.kts || true
+          if [ -f "$PROJECT_DIR/app/build.gradle.kts" ]; then
+            grep -n 'signingConfig.*debugConfig' \
+              "$PROJECT_DIR/app/build.gradle.kts" || true
           fi
 
       - name: Set up Java 17
@@ -65,17 +89,36 @@ jobs:
           java-version: '17'
 
       - name: Install Gradle 9.3.1
+        shell: bash
         run: |
+          set -e
+
           wget -q https://services.gradle.org/distributions/gradle-9.3.1-bin.zip
           unzip -q gradle-9.3.1-bin.zip -d "$HOME"
           echo "$HOME/gradle-9.3.1/bin" >> "$GITHUB_PATH"
 
       - name: Build debug APK
+        shell: bash
         run: |
+          set -e
+
+          PROJECT_DIR="${{ steps.project.outputs.project_dir }}"
+
+          echo "===== GRADLE VERSION ====="
           gradle --version
-          gradle assembleDebug --stacktrace --no-daemon --no-configuration-cache
+
+          echo "===== BUILDING PROJECT ====="
+          echo "Project directory: $PROJECT_DIR"
+
+          cd "$PROJECT_DIR"
+
+          gradle assembleDebug \
+            --stacktrace \
+            --no-daemon \
+            --no-configuration-cache
 
       - name: Find generated APK
+        shell: bash
         run: |
           echo "===== GENERATED APK FILES ====="
           find . -type f -name "*.apk" -print
