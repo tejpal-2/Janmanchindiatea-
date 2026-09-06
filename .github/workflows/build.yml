@@ -8,49 +8,81 @@ on:
 
 jobs:
   build:
+    name: Build
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Fix project for CI
-        working-directory: janmanch-source
+      - name: Inspect Android project
         run: |
-          # Fix KSP 2.3.5 CI problem
-          sed -i -E 's/^(googleDevtoolsKsp[[:space:]]*=[[:space:]]*")[^"]+/\12.3.6/' gradle/libs.versions.toml
-          sed -i -E 's/^(ksp[[:space:]]*=[[:space:]]*")[^"]+/\12.3.6/' gradle/libs.versions.toml
+          echo "===== ROOT FILES ====="
+          ls -la
 
-          # Remove debug signing configuration that is not available in CI
-          sed -i '/signingConfig = signingConfigs.getByName("debugConfig")/d' app/build.gradle.kts
+          echo "===== PROJECT STRUCTURE ====="
+          find . -maxdepth 3 -type f \( \
+            -name "settings.gradle" \
+            -o -name "settings.gradle.kts" \
+            -o -name "build.gradle" \
+            -o -name "build.gradle.kts" \
+            -o -name "libs.versions.toml" \
+            -o -name "gradlew" \
+          \) -print
 
-          echo "===== KSP version ====="
-          grep -n -E 'googleDevtoolsKsp|^[[:space:]]*ksp[[:space:]]*=' gradle/libs.versions.toml || true
+          echo "===== APP DIRECTORY ====="
+          if [ -d "app" ]; then
+            ls -la app
+          else
+            echo "WARNING: root app directory not found"
+          fi
 
-          echo "===== Signing config check ====="
-          grep -n 'signingConfig.*debugConfig' app/build.gradle.kts || true
+      - name: Fix KSP and signing configuration
+        run: |
+          if [ -f "gradle/libs.versions.toml" ]; then
+            sed -i -E 's/^(googleDevtoolsKsp[[:space:]]*=[[:space:]]*")[^"]+/\12.3.6/' gradle/libs.versions.toml || true
+            sed -i -E 's/^(ksp[[:space:]]*=[[:space:]]*")[^"]+/\12.3.6/' gradle/libs.versions.toml || true
+          fi
 
-      - name: Set up Java
+          if [ -f "app/build.gradle.kts" ]; then
+            sed -i '/signingConfig = signingConfigs.getByName("debugConfig")/d' app/build.gradle.kts
+          fi
+
+          echo "===== KSP VERSION ====="
+          if [ -f "gradle/libs.versions.toml" ]; then
+            grep -n -E 'googleDevtoolsKsp|^[[:space:]]*ksp[[:space:]]*=' gradle/libs.versions.toml || true
+          fi
+
+          echo "===== SIGNING CHECK ====="
+          if [ -f "app/build.gradle.kts" ]; then
+            grep -n 'signingConfig.*debugConfig' app/build.gradle.kts || true
+          fi
+
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Install Gradle
+      - name: Install Gradle 9.3.1
         run: |
           wget -q https://services.gradle.org/distributions/gradle-9.3.1-bin.zip
           unzip -q gradle-9.3.1-bin.zip -d "$HOME"
-          echo "$HOME/gradle-9.3.1/bin" >> "$GITHUB_PATH
+          echo "$HOME/gradle-9.3.1/bin" >> "$GITHUB_PATH"
 
-      - name: Build Debug APK
-        working-directory: janmanch-source
+      - name: Build debug APK
         run: |
           gradle --version
           gradle assembleDebug --stacktrace --no-daemon --no-configuration-cache
+
+      - name: Find generated APK
+        run: |
+          echo "===== GENERATED APK FILES ====="
+          find . -type f -name "*.apk" -print
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Janmanch-Debug-APK
-          path: janmanch-source/**/build/outputs/apk/**/*.apk
+          path: "**/build/outputs/apk/**/*.apk"
           if-no-files-found: error
