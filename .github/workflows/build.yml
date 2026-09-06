@@ -64,12 +64,6 @@ jobs:
               "$PROJECT_DIR/app/build.gradle.kts"
           fi
 
-          echo "===== KSP VERSION ====="
-          if [ -f "$PROJECT_DIR/gradle/libs.versions.toml" ]; then
-            grep -n -E 'googleDevtoolsKsp|^[[:space:]]*ksp[[:space:]]*=' \
-              "$PROJECT_DIR/gradle/libs.versions.toml" || true
-          fi
-
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
@@ -101,12 +95,12 @@ jobs:
             --no-daemon \
             --no-configuration-cache
 
-      - name: Get SHA-256 from generated APK
+      - name: Get SHA-256 from APK certificate
         shell: bash
         run: |
           set -e
 
-          echo "===== FINDING APK ====="
+          echo "===== FINDING GENERATED APK ====="
 
           APK_FILE="$(find . -type f -name "*.apk" \
             -path "*/build/outputs/apk/*" | head -n 1)"
@@ -118,12 +112,29 @@ jobs:
 
           echo "APK: $APK_FILE"
 
+          echo "===== FINDING SIGNING CERTIFICATE ====="
+
+          CERT_ENTRY="$(unzip -Z1 "$APK_FILE" | \
+            grep -E '^META-INF/[^/]+\.(RSA|DSA|EC)$' | head -n 1)"
+
+          if [ -z "$CERT_ENTRY" ]; then
+            echo "ERROR: APK signing certificate was not found."
+            exit 1
+          fi
+
+          echo "Certificate: $CERT_ENTRY"
+
+          rm -f /tmp/janmanch-cert
+
+          unzip -p "$APK_FILE" "$CERT_ENTRY" > /tmp/janmanch-cert
+
           echo ""
           echo "=========================================="
-          echo "SHA-256 FINGERPRINT"
+          echo "JANMANCH SHA-256 FINGERPRINT"
           echo "=========================================="
 
-          keytool -printcert -jarfile "$APK_FILE" | grep -i "SHA256"
+          keytool -printcert -file /tmp/janmanch-cert | \
+            awk -F': ' 'BEGIN{IGNORECASE=1} /SHA256/ {print "SHA-256: " $2}'
 
           echo "=========================================="
 
