@@ -21,7 +21,7 @@ jobs:
         run: |
           set -e
 
-          echo "===== SEARCHING FOR SETTINGS FILE ====="
+          echo "===== SEARCHING FOR GRADLE PROJECT ====="
 
           SETTINGS_FILE="$(find . -type f \( \
             -name "settings.gradle.kts" \
@@ -29,9 +29,8 @@ jobs:
           \) -not -path "./.git/*" | head -n 1)"
 
           if [ -z "$SETTINGS_FILE" ]; then
-            echo "ERROR: settings.gradle.kts or settings.gradle was not found."
-            echo "===== REPOSITORY FILES ====="
-            find . -maxdepth 4 -type f | head -n 300
+            echo "ERROR: Gradle settings file was not found."
+            find . -maxdepth 5 -type f | head -n 300
             exit 1
           fi
 
@@ -42,13 +41,8 @@ jobs:
             PROJECT_DIR="."
           fi
 
-          echo "Found settings file: $SETTINGS_FILE"
           echo "Gradle project directory: $PROJECT_DIR"
-
           echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
-
-          echo "===== PROJECT DIRECTORY ====="
-          ls -la "$PROJECT_DIR"
 
       - name: Fix KSP and signing configuration
         shell: bash
@@ -57,17 +51,11 @@ jobs:
 
           PROJECT_DIR="${{ steps.project.outputs.project_dir }}"
 
-          echo "Using project directory: $PROJECT_DIR"
-
           if [ -f "$PROJECT_DIR/gradle/libs.versions.toml" ]; then
             sed -i -E 's/^(googleDevtoolsKsp[[:space:]]*=[[:space:]]*")[^"]+/\12.3.6/' \
               "$PROJECT_DIR/gradle/libs.versions.toml" || true
 
             sed -i -E 's/^(ksp[[:space:]]*=[[:space:]]*")[^"]+/\12.3.6/' \
-              "$PROJECT_DIR/gradle/libs.versions.toml" || true
-
-            echo "===== KSP VERSION ====="
-            grep -n -E 'googleDevtoolsKsp|^[[:space:]]*ksp[[:space:]]*=' \
               "$PROJECT_DIR/gradle/libs.versions.toml" || true
           fi
 
@@ -76,10 +64,10 @@ jobs:
               "$PROJECT_DIR/app/build.gradle.kts"
           fi
 
-          echo "===== SIGNING CHECK ====="
-          if [ -f "$PROJECT_DIR/app/build.gradle.kts" ]; then
-            grep -n 'signingConfig.*debugConfig' \
-              "$PROJECT_DIR/app/build.gradle.kts" || true
+          echo "===== KSP VERSION ====="
+          if [ -f "$PROJECT_DIR/gradle/libs.versions.toml" ]; then
+            grep -n -E 'googleDevtoolsKsp|^[[:space:]]*ksp[[:space:]]*=' \
+              "$PROJECT_DIR/gradle/libs.versions.toml" || true
           fi
 
       - name: Set up Java 17
@@ -104,18 +92,40 @@ jobs:
 
           PROJECT_DIR="${{ steps.project.outputs.project_dir }}"
 
-          echo "===== GRADLE VERSION ====="
-          gradle --version
-
-          echo "===== BUILDING PROJECT ====="
-          echo "Project directory: $PROJECT_DIR"
-
           cd "$PROJECT_DIR"
+
+          gradle --version
 
           gradle assembleDebug \
             --stacktrace \
             --no-daemon \
             --no-configuration-cache
+
+      - name: Get SHA-256 from generated APK
+        shell: bash
+        run: |
+          set -e
+
+          echo "===== FINDING APK ====="
+
+          APK_FILE="$(find . -type f -name "*.apk" \
+            -path "*/build/outputs/apk/*" | head -n 1)"
+
+          if [ -z "$APK_FILE" ]; then
+            echo "ERROR: APK was not found."
+            exit 1
+          fi
+
+          echo "APK: $APK_FILE"
+
+          echo ""
+          echo "=========================================="
+          echo "SHA-256 FINGERPRINT"
+          echo "=========================================="
+
+          keytool -printcert -jarfile "$APK_FILE" | grep -i "SHA256"
+
+          echo "=========================================="
 
       - name: Find generated APK
         shell: bash
